@@ -50,6 +50,7 @@ private:
     void loadStyle();
 
     void onAddTaskButtonOnClick();
+    void onAddTaskButtonToDBOnClick();
 
     QVector<task> m_task;   //Список задач
     QVector<projects> m_projects;  //Список проектов

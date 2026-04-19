@@ -85,3 +85,13 @@ QComboBox {
     padding: 5px;
     color: white;
 }
+
+#PBAddTaskToDB {
+    background-color: #252a33;
+    border: 1px solid #3d434f;
+    border-radius: 6px;
+    padding: 8px;
+    font-size: 14px;
+    color: white;
+    margin-bottom: 5px;
+}

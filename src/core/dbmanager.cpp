@@ -1,4 +1,5 @@
 #include "dbmanager.h"
+#include "QFileInfo"
 
 dbmanager::dbmanager(QString nameDB)
 {
@@ -16,6 +17,8 @@ void dbmanager::connectDatabase()
         qDebug() << "Ошибка подключения: " << m_db.lastError().text();
         return;
     }
+
+    qDebug() << "Путь к БД:" << QFileInfo(m_db.databaseName()).absoluteFilePath();
 
     qDebug() << "База данных успешно подключена!";
 }
@@ -46,11 +49,18 @@ void dbmanager::UpdateTasks(QVector<task> &tasks)
 void dbmanager::AddTaskToDB(task newTask)
 {
     QSqlQuery query;
-    query.prepare("INSERT INTO tasks VALUES (:title, :project_id, :tags, :deadline");
-    query.bindValue("title", newTask.title);
+
+    query.prepare("INSERT INTO tasks (title, project_id, tags, deadline) "
+                  "VALUES (:title, :project_id, :tags, :deadline)");
+
+    query.bindValue(":title", newTask.title);
     query.bindValue(":project_id", newTask.project_id);
     query.bindValue(":tags", newTask.tags);
     query.bindValue(":deadline", newTask.deadline);
 
-    query.exec();
+    if (!query.exec()) {
+        qDebug() << "INSERT Error:" << query.lastError().text();
+    } else {
+        qDebug() << "Task added successfully!";
+    }
 }

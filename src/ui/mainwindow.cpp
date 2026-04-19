@@ -127,11 +127,17 @@ void MainWindow::initAddLayout()
     categoryCombo = new QComboBox(this);
     categoryCombo->addItems({"Work", "Personal", "Shopping"});
 
+    QPushButton *addbutton = new QPushButton("Add",this);
+    addbutton->setObjectName("PBAddTaskToDB");
+    addbutton->setFixedSize(70, 35); // Квадратная кнопка
+    connect(addbutton, &QPushButton::clicked, this, &MainWindow::onAddTaskButtonToDBOnClick);
+
     // Добавляем всё в лайаут формы
     inputLayout->addWidget(taskInput);
     inputLayout->addWidget(labelInput);
     inputLayout->addWidget(categoryCombo);
     inputLayout->addWidget(deadlineInput);
+    inputLayout->addWidget(addbutton);
 
     // Добавляем форму в основной лайаут (между заголовком и списком)
     mainLayout->insertWidget(1, inputContainer);
@@ -153,16 +159,20 @@ void MainWindow::onAddTaskButtonOnClick()
       inputContainer->setVisible(false);
     else
       inputContainer->setVisible(true);
+}
 
-    // task addtask;
-    // addtask.title = taskInput->text();
-    // addtask.project_id = -1;
-    // addtask.tags = labelInput->text();
-    // addtask.deadline = deadlineInput->dateTime();
+void MainWindow::onAddTaskButtonToDBOnClick()
+{
+    task addtask;
+    addtask.title = taskInput->text();
+    addtask.project_id = -1;
+    addtask.tags = labelInput->text();
+    addtask.deadline = deadlineInput->dateTime();
 
-    // m_dbmanager->AddTaskToDB(addtask);
+    m_dbmanager->AddTaskToDB(addtask);
 
-    // UpdateListTask();
+    inputContainer->setVisible(false);
+    UpdateListTask();
 }
 
 void MainWindow::UpdateListTask()
