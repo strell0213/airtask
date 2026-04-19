@@ -1,0 +1,87 @@
+/* Главный контейнер окна */
+QWidget#centralWidget {
+    background-color: #1e2229; /* Темно-серый фон */
+    border-radius: 12px;       /* Закругленные углы всего окна */
+    border: 1px solid #2d323b; /* Тонкая рамка */
+}
+
+/* Заголовок AirTask */
+QLabel#appTitle {
+    color: #ffffff;
+    font-size: 18px;
+    font-weight: bold;
+    font-family: "Segoe UI", sans-serif;
+}
+
+/* Кнопка добавления + */
+QPushButton#addButton {
+    background-color: #2d323b;
+    color: #ffffff;
+    border: 1px solid #3d434f;
+    border-radius: 6px;
+    font-size: 16px;
+}
+QPushButton#addButton:hover {
+    background-color: #3d434f;
+}
+
+/* Хедер категории (Work, Personal) */
+QWidget#CategoryHeader {
+    background-color: #2d323b;
+    border-radius: 6px;
+    color: #ffffff;
+}
+
+/* Элемент задачи */
+QWidget#TaskItem {
+    background-color: #1a1d24; /* Чуть темнее фона */
+    border-radius: 6px;
+    padding: 10px;
+}
+
+/* Название задачи */
+QLabel#taskTitle {
+    color: #ffffff;
+    font-size: 14px;
+}
+
+/* Стили для тега */
+QLabel#tagBubble {
+    color: #ffffff;
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+/* Пример специфичного тега */
+QLabel#tagShopping {
+    background-color: #1d3c5a; /* Синий фон */
+    color: #4da6ff;            /* Голубой текст */
+}
+
+#inputContainer {
+    background-color: transparent;
+    border-bottom: 1px solid #2d323b;
+    margin-bottom: 10px;
+}
+
+#taskInput, #labelInput, #deadlineInput {
+    background-color: #252a33;
+    border: 1px solid #3d434f;
+    border-radius: 6px;
+    padding: 8px;
+    color: white;
+    margin-bottom: 5px;
+}
+
+#taskInput:focus {
+    border-color: #4da6ff;
+}
+
+QComboBox {
+    background-color: #252a33;
+    border: 1px solid #3d434f;
+    border-radius: 6px;
+    padding: 5px;
+    color: white;
+}

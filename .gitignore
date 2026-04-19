@@ -1,0 +1,47 @@
+# --- Qt Creator / User files ---
+*.user
+*.user.*
+*.user.profiles
+*.session
+
+# --- Build Directories (CMake / qmake) ---
+# Исключаем все папки сборки (обычно начинаются с build-)
+build*/
+out/
+
+# --- Compiled Binary Files ---
+*.exe
+*.dll
+*.so
+*.so.*
+*.a
+*.lib
+*.obj
+*.o
+*.out
+
+# --- Generated Source Files (Qt-specific) ---
+# Эти файлы создаются автоматически из .ui, .qrc и классов с Q_OBJECT
+ui_*.h
+qrc_*.cpp
+moc_*.cpp
+moc_*.h
+*.moc
+
+# --- Microsoft Visual Studio (если используешь MSVC) ---
+.vs/
+*.sln
+*.vcxproj
+*.filters
+*.suo
+*.db
+*.opendb
+
+# --- OS generated files ---
+.DS_Store
+Thumbs.db
+
+# --- SQLite (база данных приложения) ---
+# Если ты хочешь, чтобы база была пустой у каждого разработчика
+*.db
+!airtask.db # (Опционально) Удали восклицательный знак, если хочешь игнорировать и свою БД
