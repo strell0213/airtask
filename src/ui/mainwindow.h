@@ -14,6 +14,7 @@
 #include "../src/core/models/tags.h"
 #include "../src/core/dbmanager.h"
 #include "../src/core/traymanager.h"
+#include "../src/ui/taskitem.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -30,6 +31,7 @@ public:
     ~MainWindow() override;
 protected:
     void closeEvent(QCloseEvent *event) override;
+    bool eventFilter(QObject *obj, QEvent *event) override;
 private:
     Ui::MainWindow *ui;
     QVBoxLayout *scrollLayout;
@@ -45,12 +47,17 @@ private:
     //трей
     traymanager *m_traymanager;
 
+    //перемещение окна
+    bool m_dragging = false;
+    QPoint m_dragPos;
+
     void initMainWindow();
     void initAddLayout();
     void loadStyle();
 
     void onAddTaskButtonOnClick();
     void onAddTaskButtonToDBOnClick();
+    void onMoveMainLabel();
 
     QVector<task> m_task;   //Список задач
     QVector<projects> m_projects;  //Список проектов

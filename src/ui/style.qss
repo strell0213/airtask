@@ -8,7 +8,7 @@ QWidget#centralWidget {
 /* Заголовок AirTask */
 QLabel#appTitle {
     color: #ffffff;
-    font-size: 18px;
+    font-size: 24px;
     font-weight: bold;
     font-family: "Segoe UI", sans-serif;
 }
@@ -33,7 +33,7 @@ QWidget#CategoryHeader {
 }
 
 /* Элемент задачи */
-QWidget#TaskItem {
+QWidget#taskItem {
     background-color: #1a1d24; /* Чуть темнее фона */
     border-radius: 6px;
     padding: 10px;
@@ -94,4 +94,13 @@ QComboBox {
     font-size: 14px;
     color: white;
     margin-bottom: 5px;
+}
+
+taskItem {
+    background-color: #2d2d2d;
+    border-radius: 8px;
+}
+
+taskItem:hover {
+    background-color: #353535;
 }

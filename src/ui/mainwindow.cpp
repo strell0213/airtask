@@ -69,6 +69,8 @@ void MainWindow::initMainWindow()
 
     QLabel *titleLabel = new QLabel("AirTask", this);
     titleLabel->setObjectName("appTitle");
+    titleLabel->installEventFilter(this);
+    titleLabel->setCursor(Qt::OpenHandCursor);
 
     QPushButton *addButton = new QPushButton("+", this);
     addButton->setObjectName("addButton");
@@ -92,8 +94,8 @@ void MainWindow::initMainWindow()
     // Виджет, который будет лежать внутри скролла
     QWidget *scrollContent = new QWidget();
     scrollLayout = new QVBoxLayout(scrollContent); // Сохраняем лейаут, чтобы добавлять задачи
-    scrollLayout->setContentsMargins(0, 0, 0, 0);
-    scrollLayout->setSpacing(5); // Отступ между элементами списка
+    scrollLayout->setSpacing(10);
+    scrollLayout->setContentsMargins(10, 10, 10, 10);
     scrollLayout->addStretch(); // Чтобы элементы прижимались к верху
 
     scrollArea->setWidget(scrollContent);
@@ -189,15 +191,42 @@ void MainWindow::UpdateListTask()
 
     // 3. Создаем новые виджеты на основе данных из m_task
     for (const task &t : m_task) {
-        // Пока создаем простую строку с чекбоксом
-        // В будущем здесь будет: TaskItem *item = new TaskItem(t);
-        QCheckBox *taskCheck = new QCheckBox(t.title);
-        taskCheck->setChecked(t.is_completed);
-        taskCheck->setStyleSheet("color: white; font-size: 14px; padding: 5px;");
+        // Создаем наш кастомный виджет
+        taskItem *item = new taskItem(t, this);
 
-        // Вставляем виджет В НАЧАЛО (индекс 0), чтобы новые задачи были сверху
-        scrollLayout->insertWidget(0, taskCheck);
+        // Вставляем его в Layout
+        scrollLayout->insertWidget(0, item);
     }
+}
+
+bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
+    // Проверяем, что событие пришло именно от нашего titleLabel
+    if (obj->objectName() == "appTitle") {
+
+        if (event->type() == QEvent::MouseButtonPress) {
+            QMouseEvent *mouseEvent = static_cast<QMouseEvent*>(event);
+            if (mouseEvent->button() == Qt::LeftButton) {
+                m_dragging = true;
+                // Запоминаем расстояние от курсора до левого верхнего угла окна
+                m_dragPos = mouseEvent->globalPos() - frameGeometry().topLeft();
+                return true; // Событие обработано
+            }
+        }
+
+        else if (event->type() == QEvent::MouseMove && m_dragging) {
+            QMouseEvent *mouseEvent = static_cast<QMouseEvent*>(event);
+            // Перемещаем окно в новую позицию
+            move(mouseEvent->globalPos() - m_dragPos);
+            return true;
+        }
+
+        else if (event->type() == QEvent::MouseButtonRelease) {
+            m_dragging = false;
+            return true;
+        }
+    }
+    // Для всех остальных событий вызываем стандартную обработку
+    return QMainWindow::eventFilter(obj, event);
 }
 
 
