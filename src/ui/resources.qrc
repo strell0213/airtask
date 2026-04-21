@@ -2,5 +2,6 @@
     <qresource prefix="/">
         <file>style.qss</file>
         <file>icon.ico</file>
+        <file>settigns.svg</file>
     </qresource>
 </RCC>

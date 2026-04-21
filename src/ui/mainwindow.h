@@ -15,6 +15,8 @@
 #include "../src/core/dbmanager.h"
 #include "../src/core/traymanager.h"
 #include "../src/ui/taskitem.h"
+#include <QStackedWidget>
+#include <QScrollArea>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -36,6 +38,9 @@ private:
     Ui::MainWindow *ui;
     QVBoxLayout *scrollLayout;
     QVBoxLayout *mainLayout;
+    QStackedWidget *stackedWidget;
+    QScrollArea *taskListScreen;
+    QWidget *settingsScreen;
 
     //форма добавления
     QWidget *inputContainer;
@@ -52,6 +57,7 @@ private:
     QPoint m_dragPos;
 
     void initMainWindow();
+    void initSettings();
     void initAddLayout();
     void loadStyle();
 

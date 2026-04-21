@@ -3,27 +3,47 @@
 taskItem::taskItem(const task &t, QWidget *parent) : QWidget(parent)
 {
     this->setObjectName("taskItemWidget");
+    this->setAttribute(Qt::WA_StyledBackground); // Чтобы QSS работал
 
-    QHBoxLayout *layout = new QHBoxLayout(this);
-    layout->setContentsMargins(10, 5, 10, 5);
+    QHBoxLayout *mainLayout = new QHBoxLayout(this);
+    mainLayout->setContentsMargins(10, 8, 10, 8);
+    mainLayout->setSpacing(12);
 
     m_checkBox = new QCheckBox(this);
     m_checkBox->setChecked(t.is_completed);
 
+    // --- СОЗДАЕМ ВЕРТИКАЛЬНЫЙ БЛОК ДЛЯ ТЕКСТА ---
+    QVBoxLayout *textLayout = new QVBoxLayout();
+    textLayout->setSpacing(4); // Расстояние между заголовком и тегом
+
     m_titleLabel = new QLabel(t.title, this);
-    m_titleLabel->setStyleSheet("color: white; font-size: 14px;");
+    m_titleLabel->setStyleSheet("color: white; font-size: 16px; font-weight: 500;");
 
-    m_deleteBtn = new QPushButton("×", this); // Кнопка удаления
+    // Создаем метку для тегов
+    QHBoxLayout *textHLayout = new QHBoxLayout();
+    textHLayout->setSpacing(4);
+
+    QLabel *tagLabel = new QLabel(t.tags, this);
+    tagLabel->setObjectName("tagLabel"); // Даем имя для стилизации в QSS
+
+    QString deadlineText = t.getDeadlineText();
+    QLabel *deadlineLabel = new QLabel(deadlineText, this);
+    deadlineLabel->setObjectName("deadlineLabel");
+    textHLayout->addWidget(tagLabel);
+    textHLayout->addWidget(deadlineLabel);
+
+    textLayout->addWidget(m_titleLabel);
+    textLayout->addLayout(textHLayout);
+    // --------------------------------------------
+
+    m_deleteBtn = new QPushButton("×", this);
     m_deleteBtn->setFixedSize(24, 24);
-    m_deleteBtn->setStyleSheet("QPushButton { color: #ff4d4d; border: none; font-weight: bold; }"
-                               "QPushButton:hover { background-color: #331a1a; border-radius: 5px; }");
+    // Стили кнопок лучше оставить в QSS файле, но для примера оставим тут
 
-    layout->addWidget(m_checkBox);
-    layout->addWidget(m_titleLabel);
-    layout->addStretch(); // Распирает элементы, чтобы кнопка была справа
-    layout->addWidget(m_deleteBtn);
-
-    // Можно добавить эффект "зачеркивания" при нажатии на чекбокс позже через сигналы
+    mainLayout->addWidget(m_checkBox);
+    mainLayout->addLayout(textLayout); // Добавляем наш текстовый блок
+    mainLayout->addStretch();
+    mainLayout->addWidget(m_deleteBtn);
 }
 
 

@@ -3,7 +3,6 @@
 #include <QVBoxLayout>
 #include <QPushButton>
 #include <QLabel>
-#include <QScrollArea>
 #include <QFile>
 #include <QCheckBox>
 #include <QLineEdit>
@@ -52,7 +51,7 @@ void MainWindow::closeEvent(QCloseEvent *event) {
 
 void MainWindow::initMainWindow()
 {
-    setWindowFlags(Qt::FramelessWindowHint | Qt::Tool);
+    setWindowFlags(Qt::FramelessWindowHint | Qt::Tool | Qt::WindowStaysOnTopHint);
     setAttribute(Qt::WA_TranslucentBackground); // Прозрачный фон для закругленных углов
 
     QWidget *centralWidget = new QWidget(this);
@@ -65,7 +64,7 @@ void MainWindow::initMainWindow()
 
     QWidget *headerWidget = new QWidget(this);
     QHBoxLayout *headerLayout = new QHBoxLayout(headerWidget);
-    headerLayout->setContentsMargins(0, 0, 0, 30); // Отступ снизу до списка
+    headerLayout->setContentsMargins(5, 0, 0, 15); // Отступ снизу до списка
 
     QLabel *titleLabel = new QLabel("AirTask", this);
     titleLabel->setObjectName("appTitle");
@@ -76,30 +75,49 @@ void MainWindow::initMainWindow()
     addButton->setObjectName("addButton");
     addButton->setFixedSize(30, 30); // Квадратная кнопка
 
+    QPushButton *settingsButton = new QPushButton(this);
+    settingsButton->setObjectName("settingsButton");
+    settingsButton->setIcon(QIcon(":/settigns.svg"));
+    settingsButton->setFixedSize(30, 30); // Квадратная кнопка
+
     connect(addButton, &QPushButton::clicked, this, &MainWindow::onAddTaskButtonOnClick);
+    connect(settingsButton, &QPushButton::clicked, this, [this](){
+        if(stackedWidget->currentIndex() == 0) {
+            stackedWidget->setCurrentIndex(1); // Показать настройки
+        } else {
+            stackedWidget->setCurrentIndex(0); // Вернуться к задачам
+        }
+    });
 
     headerLayout->addWidget(titleLabel);
     headerLayout->addStretch(); // Сдвигает кнопку вправо
+    headerLayout->addWidget(settingsButton);
     headerLayout->addWidget(addButton);
 
     mainLayout->addWidget(headerWidget);
 
-    // 4. Создаем область прокрутки (Scroll Area) для списка задач
-    QScrollArea *scrollArea = new QScrollArea(this);
-    scrollArea->setWidgetResizable(true);
-    scrollArea->setFrameShape(QFrame::NoFrame); // Убираем рамку скролла
-    scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff); // Убираем горизонтальный скролл
-    scrollArea->setObjectName("taskScrollArea");
+    stackedWidget = new QStackedWidget(this);
+    mainLayout->addWidget(stackedWidget);
 
-    // Виджет, который будет лежать внутри скролла
+    taskListScreen = new QScrollArea(this);
+    taskListScreen->setWidgetResizable(true);
+    taskListScreen->setFrameShape(QFrame::NoFrame); // Убираем рамку скролла
+    taskListScreen->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff); // Убираем горизонтальный скролл
+    taskListScreen->setObjectName("taskScrollArea");
+
     QWidget *scrollContent = new QWidget();
     scrollLayout = new QVBoxLayout(scrollContent); // Сохраняем лейаут, чтобы добавлять задачи
     scrollLayout->setSpacing(10);
     scrollLayout->setContentsMargins(10, 10, 10, 10);
     scrollLayout->addStretch(); // Чтобы элементы прижимались к верху
 
-    scrollArea->setWidget(scrollContent);
-    mainLayout->addWidget(scrollArea);
+    taskListScreen->setWidget(scrollContent);
+    stackedWidget->addWidget(taskListScreen);
+
+    settingsScreen = new QWidget();
+    settingsScreen->setObjectName("settingsScreen");
+    initSettings();
+    stackedWidget->addWidget(settingsScreen);
 }
 
 void MainWindow::initAddLayout()
@@ -143,6 +161,17 @@ void MainWindow::initAddLayout()
 
     // Добавляем форму в основной лайаут (между заголовком и списком)
     mainLayout->insertWidget(1, inputContainer);
+}
+
+void MainWindow::initSettings()
+{
+    QVBoxLayout *layout = new QVBoxLayout(settingsScreen);
+
+    QLabel *label = new QLabel("Настройки программы", settingsScreen);
+    label->setStyleSheet("color: white; font-size: 18px;");
+
+    layout->addWidget(label);
+    layout->addStretch();
 }
 
 void MainWindow::loadStyle()

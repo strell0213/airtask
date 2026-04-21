@@ -1,14 +1,18 @@
 /* Главный контейнер окна */
 QWidget#centralWidget {
     background-color: #1e2229; /* Темно-серый фон */
-    border-radius: 12px;       /* Закругленные углы всего окна */
-    border: 1px solid #2d323b; /* Тонкая рамка */
+    border: none;
+}
+
+QStatusBar {
+    background-color: #1e2229;
+    border-top: none;
 }
 
 /* Заголовок AirTask */
 QLabel#appTitle {
     color: #ffffff;
-    font-size: 24px;
+    font-size: 16px;
     font-weight: bold;
     font-family: "Segoe UI", sans-serif;
 }
@@ -19,10 +23,28 @@ QPushButton#addButton {
     color: #ffffff;
     border: 1px solid #3d434f;
     border-radius: 6px;
-    font-size: 16px;
+    font-size: 20px;
+    font-weight: bold;
+    padding-bottom: 3px;
 }
+
 QPushButton#addButton:hover {
     background-color: #3d434f;
+}
+
+QPushButton#settingsButton {
+    background-color: #2d323b;
+    color: #ffffff;
+    border: 1px solid #3d434f;
+    border-radius: 6px;
+}
+
+QPushButton#settingsButton:hover {
+    background-color: #3d434f;
+}
+
+QWidget#settingsScreen{
+    background-color: #2d2d2d;
 }
 
 /* Хедер категории (Work, Personal) */
@@ -103,4 +125,23 @@ taskItem {
 
 taskItem:hover {
     background-color: #353535;
+}
+
+#tagLabel {
+    color: #87ceeb;              /* Небесно-голубой текст */
+    background-color: rgba(135, 206, 235, 0.1); /* Очень слабый голубой фон */
+    border: 1px solid rgba(135, 206, 235, 0.5); /* Полупрозрачная рамка */
+    border-radius: 4px;          /* Скругление */
+    padding: 2px 6px;            /* Отступы внутри рамки (2px верх/низ, 6px лево/право) */
+    font-size: 12px;             /* Теги обычно меньше заголовка */
+}
+
+#deadlineLabel
+{
+    color: #ff6666;
+    background-color: rgba(255, 102, 102, 0.1); /* 10% прозрачности красного */
+    border: 1px solid rgba(255, 102, 102, 0.5); /* 50% прозрачности для рамки */
+    border-radius: 4px;          /* Скругление */
+    padding: 2px 6px;            /* Отступы внутри рамки (2px верх/низ, 6px лево/право) */
+    font-size: 12px;             /* Теги обычно меньше заголовка */
 }

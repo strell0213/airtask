@@ -18,6 +18,8 @@ public:
     QString tags;
 
     task();
+
+    QString getDeadlineText() const;
 };
 
 #endif // TASK_H
