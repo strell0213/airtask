@@ -221,7 +221,9 @@ void MainWindow::UpdateListTask()
     // 3. Создаем новые виджеты на основе данных из m_task
     for (const task &t : m_task) {
         // Создаем наш кастомный виджет
-        taskItem *item = new taskItem(t, this);
+        taskItem *item = new taskItem(t, m_dbmanager, this);
+
+        connect(item, &taskItem::deleteRequested, this, &MainWindow::UpdateListTask);
 
         // Вставляем его в Layout
         scrollLayout->insertWidget(0, item);

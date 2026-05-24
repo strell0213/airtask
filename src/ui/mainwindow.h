@@ -31,6 +31,7 @@ class MainWindow : public QMainWindow
 public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow() override;
+    void UpdateListTask();
 protected:
     void closeEvent(QCloseEvent *event) override;
     bool eventFilter(QObject *obj, QEvent *event) override;
@@ -70,7 +71,5 @@ private:
     QVector<tags> m_tags;   //Список меток
 
     dbmanager *m_dbmanager; //Движок для работы с базой
-
-    void UpdateListTask();
 };
 #endif // MAINWINDOW_H

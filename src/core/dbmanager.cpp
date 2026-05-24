@@ -25,6 +25,7 @@ void dbmanager::connectDatabase()
 
 void dbmanager::UpdateTasks(QVector<task> &tasks)
 {
+    tasks.clear();
     QSqlQuery query;
     if (!query.exec("SELECT * FROM tasks")) {
         qDebug() << "Ошибка запроса:" << query.lastError().text();
@@ -62,5 +63,20 @@ void dbmanager::AddTaskToDB(task newTask)
         qDebug() << "INSERT Error:" << query.lastError().text();
     } else {
         qDebug() << "Task added successfully!";
+    }
+}
+
+void dbmanager::DeleteTaskFromDB(task t)
+{
+    QSqlQuery query;
+
+    query.prepare("DELETE FROM tasks WHERE id = :id");
+
+    query.bindValue(":id", t.id);
+
+    if (!query.exec()) {
+        qDebug() << "DELETE Error:" << query.lastError().text();
+    } else {
+        qDebug() << "Task deleted successfully!";
     }
 }

@@ -20,6 +20,7 @@ public:
 
     void UpdateTasks(QVector<task> &m_tasks); //Передаем адресс переменной в стеке
     void AddTaskToDB(task newTask);
+    void DeleteTaskFromDB(task t);
 
 };
 

@@ -1,7 +1,10 @@
 #include "taskitem.h"
 
-taskItem::taskItem(const task &t, QWidget *parent) : QWidget(parent)
+taskItem::taskItem(task t, dbmanager *dbm, QWidget *parent) : QWidget(parent)
 {
+    m_Task = t;
+    m_db = dbm;
+
     this->setObjectName("taskItemWidget");
     this->setAttribute(Qt::WA_StyledBackground); // Чтобы QSS работал
 
@@ -10,23 +13,23 @@ taskItem::taskItem(const task &t, QWidget *parent) : QWidget(parent)
     mainLayout->setSpacing(12);
 
     m_checkBox = new QCheckBox(this);
-    m_checkBox->setChecked(t.is_completed);
+    m_checkBox->setChecked(m_Task.is_completed);
 
     // --- СОЗДАЕМ ВЕРТИКАЛЬНЫЙ БЛОК ДЛЯ ТЕКСТА ---
     QVBoxLayout *textLayout = new QVBoxLayout();
     textLayout->setSpacing(4); // Расстояние между заголовком и тегом
 
-    m_titleLabel = new QLabel(t.title, this);
+    m_titleLabel = new QLabel(m_Task.title, this);
     m_titleLabel->setStyleSheet("color: white; font-size: 16px; font-weight: 500;");
 
     // Создаем метку для тегов
     QHBoxLayout *textHLayout = new QHBoxLayout();
     textHLayout->setSpacing(4);
 
-    QLabel *tagLabel = new QLabel(t.tags, this);
+    QLabel *tagLabel = new QLabel(m_Task.tags, this);
     tagLabel->setObjectName("tagLabel"); // Даем имя для стилизации в QSS
 
-    QString deadlineText = t.getDeadlineText();
+    QString deadlineText = m_Task.getDeadlineText();
     QLabel *deadlineLabel = new QLabel(deadlineText, this);
     deadlineLabel->setObjectName("deadlineLabel");
     textHLayout->addWidget(tagLabel);
@@ -38,6 +41,7 @@ taskItem::taskItem(const task &t, QWidget *parent) : QWidget(parent)
 
     m_deleteBtn = new QPushButton("×", this);
     m_deleteBtn->setFixedSize(24, 24);
+    connect(m_deleteBtn, &QPushButton::clicked, this, &taskItem::onDeleteBtnClick);
     // Стили кнопок лучше оставить в QSS файле, но для примера оставим тут
 
     mainLayout->addWidget(m_checkBox);
@@ -53,4 +57,10 @@ void taskItem::paintEvent(QPaintEvent *event)
     opt.initFrom(this);
     QPainter p(this);
     style()->drawPrimitive(QStyle::PE_Widget, &opt, &p, this);
+}
+
+void taskItem::onDeleteBtnClick()
+{
+    m_db->DeleteTaskFromDB(m_Task);
+    emit deleteRequested();
 }
