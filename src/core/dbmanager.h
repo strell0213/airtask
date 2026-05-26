@@ -7,6 +7,7 @@
 #include <QDebug>
 
 #include "../src/core/models/task.h"
+#include "../src/core/models/projects.h"
 
 class dbmanager
 {
@@ -22,6 +23,11 @@ public:
     void AddTaskToDB(task newTask);
     void DeleteTaskFromDB(task t);
 
+    void UpdateProjects(QVector<projects> &projects);
+    QVector<QString> GetListNameProjects();
+    int GetFindProjectOrCreateID(QString name);
+    int GetFindProject(QString name);
+    int CreateProjectByName(QString name);
 };
 
 #endif // DBMANAGER_H

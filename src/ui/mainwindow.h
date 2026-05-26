@@ -32,6 +32,7 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow() override;
     void UpdateListTask();
+    void UpdateProjectTabs();
 protected:
     void closeEvent(QCloseEvent *event) override;
     bool eventFilter(QObject *obj, QEvent *event) override;
@@ -49,6 +50,9 @@ private:
     QLineEdit *labelInput;
     QComboBox *categoryCombo;
     QDateTimeEdit *deadlineInput;
+    QPushButton *btnCalendar;
+    QHBoxLayout *tabsLayout;
+    QButtonGroup *m_filterGroup;
 
     //трей
     traymanager *m_traymanager;
@@ -57,10 +61,14 @@ private:
     bool m_dragging = false;
     QPoint m_dragPos;
 
+    //projects
+    int m_currentProjectId = -1;  // -1 = все проекты
+
     void initMainWindow();
     void initSettings();
     void initAddLayout();
     void loadStyle();
+    void loadProjectsAddComboBox();
 
     void onAddTaskButtonOnClick();
     void onAddTaskButtonToDBOnClick();
@@ -71,5 +79,7 @@ private:
     QVector<tags> m_tags;   //Список меток
 
     dbmanager *m_dbmanager; //Движок для работы с базой
+
+    void ShowDatePickerPopup();
 };
 #endif // MAINWINDOW_H

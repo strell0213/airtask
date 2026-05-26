@@ -47,6 +47,26 @@ void dbmanager::UpdateTasks(QVector<task> &tasks)
     }
 }
 
+QVector<QString> dbmanager::GetListNameProjects()
+{
+    QVector<QString> names;
+
+    QSqlQuery query;
+    if (!query.exec("SELECT * FROM projects")) {
+        qDebug() << "Ошибка запроса:" << query.lastError().text();
+        return {};
+    }
+
+    while(query.next())
+    {
+        QString name = query.value("name").toString();
+
+        names.push_back(name);
+    }
+
+    return names;
+}
+
 void dbmanager::AddTaskToDB(task newTask)
 {
     QSqlQuery query;
@@ -78,5 +98,68 @@ void dbmanager::DeleteTaskFromDB(task t)
         qDebug() << "DELETE Error:" << query.lastError().text();
     } else {
         qDebug() << "Task deleted successfully!";
+    }
+}
+
+void dbmanager::UpdateProjects(QVector<projects> &m_projects)
+{
+    m_projects.clear();
+    QSqlQuery query;
+    if (!query.exec("SELECT * FROM projects")) {
+        qDebug() << "Ошибка запроса:" << query.lastError().text();
+        return;
+    }
+
+    while(query.next())
+    {
+        projects p;
+        p.id = query.value("id").toInt();
+        p.name = query.value("name").toString();
+        p.color = query.value("color").toString();
+
+        m_projects.push_back(p);
+    }
+}
+
+int dbmanager::GetFindProjectOrCreateID(QString name)
+{
+    int findId = GetFindProject(name);
+    if(findId >= 0) return findId;
+
+    int createId = CreateProjectByName(name);
+    if(createId >= 0) return createId;
+
+    return -1;
+}
+
+int dbmanager::GetFindProject(QString name)
+{
+    QSqlQuery query;
+
+    query.prepare("SELECT id FROM projects WHERE name = :name");
+    query.bindValue(":name", name);
+    if (!query.exec()) {
+        qDebug() << "Ошибка запроса:" << query.lastError().text();
+        return -1;
+    }
+
+    if (!query.first()) return -1;
+
+    int res = query.value("id").toInt();
+    return res;
+}
+
+int dbmanager::CreateProjectByName(QString name)
+{
+    QSqlQuery query;
+
+    query.prepare("INSERT INTO projects (name) VALUES (:name)");
+    query.bindValue(":name", name);
+
+    if (!query.exec()) {
+        qDebug() << "INSERT Error:" << query.lastError().text();
+        return -1;
+    } else {
+        return query.lastInsertId().toInt();
     }
 }

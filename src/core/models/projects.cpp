@@ -1,3 +1,5 @@
 #include "projects.h"
 
-projects::projects() {}
+projects::projects() {
+    color = "#FFFFFF";
+}

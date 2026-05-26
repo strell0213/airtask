@@ -7,6 +7,11 @@
 #include <QCheckBox>
 #include <QLineEdit>
 #include <QComboBox>
+#include <QDialog>
+#include <QHBoxLayout>
+#include <QTimeEdit>
+#include <QCalendarWidget>
+#include <QButtonGroup>
 
 
 MainWindow::MainWindow(QWidget *parent)
@@ -23,6 +28,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     m_dbmanager = new dbmanager("airtask.db");
     UpdateListTask();
+    UpdateProjectTabs();
 
     m_traymanager = new traymanager();
     m_traymanager->createTrayIcon(this);
@@ -96,6 +102,25 @@ void MainWindow::initMainWindow()
 
     mainLayout->addWidget(headerWidget);
 
+    QWidget *tabsWidget = new QWidget(this);
+    tabsLayout = new QHBoxLayout(tabsWidget);
+    tabsLayout->setContentsMargins(5, 0, 5, 8);
+    tabsLayout->setSpacing(6);
+    tabsLayout->addStretch();                        // кнопки прижаты влево, stretch справа
+    mainLayout->addWidget(tabsWidget);
+
+    m_filterGroup = new QButtonGroup(this);
+    m_filterGroup->setExclusive(true);
+
+    connect(m_filterGroup, &QButtonGroup::idClicked, this, [this](int btnIndex){
+        if (btnIndex == 0) {
+            m_currentProjectId = -1;  // показать все
+        } else {
+            m_currentProjectId = m_projects[btnIndex - 1].id; // индекс проекта в БД
+        }
+        UpdateListTask();
+    });
+
     stackedWidget = new QStackedWidget(this);
     mainLayout->addWidget(stackedWidget);
 
@@ -142,10 +167,24 @@ void MainWindow::initAddLayout()
 
     deadlineInput = new QDateTimeEdit(this);
     deadlineInput->setObjectName("deadlineInput");
+    deadlineInput->setReadOnly(true);
+    deadlineInput->setButtonSymbols(QAbstractSpinBox::NoButtons);
+    deadlineInput->setDisplayFormat("dd-MMM-yy HH:mm");
+    deadlineInput->setDate(QDate::currentDate());
+
+    btnCalendar = new QPushButton("📅", this);
+    btnCalendar->setFixedWidth(30);
+
+    connect(btnCalendar, &QPushButton::clicked, this, &MainWindow::ShowDatePickerPopup);
+
+    QHBoxLayout *deadlineLayout = new QHBoxLayout();
+    deadlineLayout->addWidget(deadlineInput);
+    deadlineLayout->addWidget(btnCalendar);
 
     // Выбор категории (Work/Personal)
     categoryCombo = new QComboBox(this);
-    categoryCombo->addItems({"Work", "Personal", "Shopping"});
+    categoryCombo->setEditable(true);
+    loadProjectsAddComboBox();
 
     QPushButton *addbutton = new QPushButton("Add",this);
     addbutton->setObjectName("PBAddTaskToDB");
@@ -156,7 +195,7 @@ void MainWindow::initAddLayout()
     inputLayout->addWidget(taskInput);
     inputLayout->addWidget(labelInput);
     inputLayout->addWidget(categoryCombo);
-    inputLayout->addWidget(deadlineInput);
+    inputLayout->addLayout(deadlineLayout);
     inputLayout->addWidget(addbutton);
 
     // Добавляем форму в основной лайаут (между заголовком и списком)
@@ -194,9 +233,11 @@ void MainWindow::onAddTaskButtonOnClick()
 
 void MainWindow::onAddTaskButtonToDBOnClick()
 {
+    int projectId = m_dbmanager->GetFindProjectOrCreateID(categoryCombo->currentText().trimmed());
+
     task addtask;
     addtask.title = taskInput->text();
-    addtask.project_id = -1;
+    addtask.project_id = projectId;
     addtask.tags = labelInput->text();
     addtask.deadline = deadlineInput->dateTime();
 
@@ -204,6 +245,37 @@ void MainWindow::onAddTaskButtonToDBOnClick()
 
     inputContainer->setVisible(false);
     UpdateListTask();
+}
+
+void MainWindow::UpdateProjectTabs()
+{
+    // Очищаем старые кнопки
+    QLayoutItem *item;
+    while ((item = tabsLayout->takeAt(0)) != nullptr) {
+        if (item->widget()) delete item->widget();
+        delete item;
+    }
+    m_filterGroup->buttons().clear();
+
+    // Кнопка "Все" — btnIndex = 0
+    QPushButton *btnAll = new QPushButton("Все", this);
+    btnAll->setCheckable(true);
+    btnAll->setChecked(true);
+    btnAll->setObjectName("projectTab");
+    m_filterGroup->addButton(btnAll, 0);
+    tabsLayout->addWidget(btnAll);
+
+    m_dbmanager->UpdateProjects(m_projects);
+
+    for (int i = 0; i < m_projects.size(); i++) {
+        QPushButton *btn = new QPushButton(m_projects[i].name, this);
+        btn->setCheckable(true);
+        btn->setObjectName("projectTab");
+        m_filterGroup->addButton(btn, i + 1);
+        tabsLayout->addWidget(btn);
+    }
+
+    tabsLayout->addStretch();
 }
 
 void MainWindow::UpdateListTask()
@@ -220,6 +292,9 @@ void MainWindow::UpdateListTask()
 
     // 3. Создаем новые виджеты на основе данных из m_task
     for (const task &t : m_task) {
+        if (m_currentProjectId != -1 && t.project_id != m_currentProjectId)
+            continue;
+
         // Создаем наш кастомный виджет
         taskItem *item = new taskItem(t, m_dbmanager, this);
 
@@ -227,6 +302,18 @@ void MainWindow::UpdateListTask()
 
         // Вставляем его в Layout
         scrollLayout->insertWidget(0, item);
+    }
+}
+
+void MainWindow::loadProjectsAddComboBox()
+{
+    QVector<QString> names = m_dbmanager->GetListNameProjects();
+
+    if(names.empty()) return;
+
+    for (QString n : names)
+    {
+        categoryCombo->addItem(n);
     }
 }
 
@@ -258,6 +345,48 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
     }
     // Для всех остальных событий вызываем стандартную обработку
     return QMainWindow::eventFilter(obj, event);
+}
+
+void MainWindow::ShowDatePickerPopup()
+{
+    QDialog *popup = new QDialog(this);
+    popup->setWindowFlags(Qt::Popup);
+    popup->setFixedWidth(300);
+
+    QVBoxLayout *layout = new QVBoxLayout(popup);
+    layout->setContentsMargins(8, 8, 8, 8);
+
+    // Календарь
+    QCalendarWidget *calendar = new QCalendarWidget(popup);
+    calendar->setSelectedDate(deadlineInput->date());
+    layout->addWidget(calendar);
+
+    // Выбор времени
+    QHBoxLayout *timeLayout = new QHBoxLayout();
+    QLabel *timeLabel = new QLabel("Время:", popup);
+    QTimeEdit *timeEdit = new QTimeEdit(popup);
+    timeEdit->setTime(deadlineInput->time());
+    timeEdit->setDisplayFormat("HH:mm");
+    timeLayout->addWidget(timeLabel);
+    timeLayout->addWidget(timeEdit);
+    layout->addLayout(timeLayout);
+
+    // Кнопка подтверждения
+    QPushButton *btnOk = new QPushButton("Готово", popup);
+    layout->addWidget(btnOk);
+
+    connect(btnOk, &QPushButton::clicked, [=]() {
+        QDateTime selected;
+        selected.setDate(calendar->selectedDate());
+        selected.setTime(timeEdit->time());
+        deadlineInput->setDateTime(selected);
+        popup->close();
+    });
+
+    // Показываем под кнопкой-календарём
+    QPoint pos = btnCalendar->mapToGlobal(QPoint(0, btnCalendar->height()));
+    popup->move(pos);
+    popup->exec();
 }
 
 
