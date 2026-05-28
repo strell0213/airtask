@@ -12,7 +12,13 @@
 #include <QTimeEdit>
 #include <QCalendarWidget>
 #include <QButtonGroup>
+#include <algorithm>
 
+static bool taskItemYLessThan(taskItem* a, taskItem* b)
+{
+    if (!a || !b) return a != nullptr;
+    return a->mapToParent(QPoint(0, 0)).y() < b->mapToParent(QPoint(0, 0)).y();
+}
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -130,13 +136,13 @@ void MainWindow::initMainWindow()
     taskListScreen->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff); // Убираем горизонтальный скролл
     taskListScreen->setObjectName("taskScrollArea");
 
-    QWidget *scrollContent = new QWidget();
-    scrollLayout = new QVBoxLayout(scrollContent); // Сохраняем лейаут, чтобы добавлять задачи
+    m_scrollContent = new QWidget();
+    scrollLayout = new QVBoxLayout(m_scrollContent); // Сохраняем лейаут, чтобы добавлять задачи
     scrollLayout->setSpacing(10);
     scrollLayout->setContentsMargins(10, 10, 10, 10);
     scrollLayout->addStretch(); // Чтобы элементы прижимались к верху
 
-    taskListScreen->setWidget(scrollContent);
+    taskListScreen->setWidget(m_scrollContent);
     stackedWidget->addWidget(taskListScreen);
 
     settingsScreen = new QWidget();
@@ -280,7 +286,7 @@ void MainWindow::UpdateProjectTabs()
 
 void MainWindow::UpdateListTask()
 {
-    m_dbmanager->UpdateTasks(m_task);
+    m_dbmanager->UpdateTasks(m_task, m_currentProjectId);
 
     while (scrollLayout->count() > 1) {
         QLayoutItem* item = scrollLayout->takeAt(0); // Берем самый верхний элемент
@@ -296,12 +302,13 @@ void MainWindow::UpdateListTask()
             continue;
 
         // Создаем наш кастомный виджет
-        taskItem *item = new taskItem(t, m_dbmanager, this);
+        taskItem *item = new taskItem(t, m_dbmanager, m_scrollContent);
 
         connect(item, &taskItem::deleteRequested, this, &MainWindow::UpdateListTask);
+        connect(item, &taskItem::orderChanged, this, &MainWindow::onTaskOrderChanged);
 
         // Вставляем его в Layout
-        scrollLayout->insertWidget(0, item);
+        scrollLayout->insertWidget(scrollLayout->count() - 1, item); // перед stretch
     }
 }
 
@@ -389,4 +396,36 @@ void MainWindow::ShowDatePickerPopup()
     popup->exec();
 }
 
+QList<taskItem*> MainWindow::collectVisibleTaskItems() const
+{
+    QList<taskItem*> items;
+    if (!scrollLayout) return items;
+
+    for (int i = 0; i < scrollLayout->count() - 1; ++i) {
+        QLayoutItem *li = scrollLayout->itemAt(i);
+        if (!li || !li->widget()) continue;
+        if (auto *w = qobject_cast<taskItem*>(li->widget()))
+            items.append(w);
+    }
+    return items;
+}
+
+void MainWindow::onTaskOrderChanged()
+{
+    ReorderTasks(collectVisibleTaskItems(), m_currentProjectId);
+}
+
+void MainWindow::ReorderTasks(QList<taskItem*> items, int orderProjectId)
+{
+    std::sort(items.begin(), items.end(), taskItemYLessThan);
+
+    for (int i = 0; i < items.size(); i++) {
+        taskItem *w = items[i];
+        if (!w) continue;
+        m_dbmanager->SetTaskOrder(w->taskId(), orderProjectId, i);
+    }
+
+    m_dbmanager->NormalizeTaskOrder(orderProjectId);
+    UpdateListTask();
+}
 

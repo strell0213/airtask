@@ -33,6 +33,9 @@ public:
     ~MainWindow() override;
     void UpdateListTask();
     void UpdateProjectTabs();
+    void ReorderTasks(QList<taskItem*> items, int projectId);
+private slots:
+    void onTaskOrderChanged();
 protected:
     void closeEvent(QCloseEvent *event) override;
     bool eventFilter(QObject *obj, QEvent *event) override;
@@ -42,6 +45,7 @@ private:
     QVBoxLayout *mainLayout;
     QStackedWidget *stackedWidget;
     QScrollArea *taskListScreen;
+    QWidget *m_scrollContent = nullptr;
     QWidget *settingsScreen;
 
     //форма добавления
@@ -81,5 +85,6 @@ private:
     dbmanager *m_dbmanager; //Движок для работы с базой
 
     void ShowDatePickerPopup();
+    QList<taskItem*> collectVisibleTaskItems() const;
 };
 #endif // MAINWINDOW_H

@@ -8,6 +8,8 @@
 #include <QBoxLayout>
 #include <QPainter>
 #include <QStyleOption>
+#include <QMouseEvent>
+#include <QPoint>
 
 #include "../src/core/models/task.h"
 #include "../src/core/dbmanager.h"
@@ -17,9 +19,14 @@ class taskItem : public QWidget //композиция
     Q_OBJECT
 public:
     explicit taskItem(task t, dbmanager *dbm, QWidget *parent = nullptr);
+    int taskId() const { return m_Task.id; }
+    int projectId() const { return m_Task.project_id; }
 
 protected:
     void paintEvent(QPaintEvent *event) override;
+    void mousePressEvent(QMouseEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
 private:
     task m_Task;
     dbmanager *m_db;
@@ -28,10 +35,19 @@ private:
     QLabel *m_titleLabel;
     QPushButton *m_deleteBtn;
 
+    bool m_dragPending = false;
+    bool m_dragActive = false;
+    QPoint m_dragStartGlobal;
+
+    bool isDragHandle(const QPoint &pos) const;
+    void moveInList(const QPoint &globalPos);
+    void finishDrag(bool saveOrder);
+
     void onDeleteBtnClick();
 
 signals:
     void deleteRequested();
+    void orderChanged();
 };
 
 #endif // TASKITEM_H

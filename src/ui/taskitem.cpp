@@ -1,5 +1,14 @@
 #include "taskitem.h"
 
+#include <QVBoxLayout>
+#include <QAbstractButton>
+#include <QScrollArea>
+#include <QScrollBar>
+
+namespace {
+constexpr int kDragThreshold = 6;
+}
+
 taskItem::taskItem(task t, dbmanager *dbm, QWidget *parent) : QWidget(parent)
 {
     m_Task = t;
@@ -51,7 +60,7 @@ taskItem::taskItem(task t, dbmanager *dbm, QWidget *parent) : QWidget(parent)
 }
 
 
-void taskItem::paintEvent(QPaintEvent *event)
+void taskItem::paintEvent(QPaintEvent * /*event*/)
 {
     QStyleOption opt;
     opt.initFrom(this);
@@ -63,4 +72,124 @@ void taskItem::onDeleteBtnClick()
 {
     m_db->DeleteTaskFromDB(m_Task);
     emit deleteRequested();
+}
+
+bool taskItem::isDragHandle(const QPoint &pos) const
+{
+    QWidget *child = childAt(pos);
+    while (child && child != this) {
+        if (child == m_checkBox || child == m_deleteBtn)
+            return false;
+        if (qobject_cast<QAbstractButton*>(child))
+            return false;
+        child = child->parentWidget();
+    }
+    return true;
+}
+
+void taskItem::mousePressEvent(QMouseEvent *event)
+{
+    if (event->button() == Qt::LeftButton && isDragHandle(event->pos())) {
+        m_dragPending = true;
+        m_dragActive = false;
+        m_dragStartGlobal = event->globalPosition().toPoint();
+    }
+    QWidget::mousePressEvent(event);
+}
+
+void taskItem::moveInList(const QPoint &globalPos)
+{
+    QWidget *container = parentWidget();
+    if (!container) return;
+
+    auto *layout = qobject_cast<QVBoxLayout*>(container->layout());
+    if (!layout) return;
+
+    const int count = layout->count();
+    if (count <= 1) return;
+
+    int currentIndex = -1;
+    for (int i = 0; i < count - 1; ++i) {
+        if (layout->itemAt(i)->widget() == this) {
+            currentIndex = i;
+            break;
+        }
+    }
+    if (currentIndex < 0) return;
+
+    int targetIndex = count - 1;
+    for (int i = 0; i < count - 1; ++i) {
+        QWidget *w = layout->itemAt(i)->widget();
+        if (!w || w == this) continue;
+
+        const int midY = w->mapToGlobal(w->rect().center()).y();
+        if (globalPos.y() < midY) {
+            targetIndex = i;
+            break;
+        }
+    }
+
+    if (targetIndex > currentIndex)
+        --targetIndex;
+
+    if (targetIndex != currentIndex)
+        layout->insertWidget(targetIndex, this);
+
+    // автопрокрутка при перетаскивании у краёв списка
+    for (QWidget *p = container; p; p = p->parentWidget()) {
+        auto *scroll = qobject_cast<QScrollArea*>(p);
+        if (!scroll) continue;
+
+        const int margin = 24;
+        const QPoint viewPos = scroll->viewport()->mapFromGlobal(globalPos);
+        const int viewH = scroll->viewport()->height();
+        QScrollBar *bar = scroll->verticalScrollBar();
+        bar->blockSignals(true);
+        if (viewPos.y() < margin)
+            bar->setValue(bar->value() - 8);
+        else if (viewPos.y() > viewH - margin)
+            bar->setValue(bar->value() + 8);
+        bar->blockSignals(false);
+        break;
+    }
+}
+
+void taskItem::finishDrag(bool saveOrder)
+{
+    if (m_dragActive) {
+        releaseMouse();
+        if (saveOrder)
+            emit orderChanged();
+    }
+    m_dragPending = false;
+    m_dragActive = false;
+}
+
+void taskItem::mouseMoveEvent(QMouseEvent *event)
+{
+    if (m_dragPending && (event->buttons() & Qt::LeftButton)) {
+        const QPoint delta = event->globalPosition().toPoint() - m_dragStartGlobal;
+        if (!m_dragActive) {
+            if (delta.manhattanLength() < kDragThreshold)
+                return;
+            m_dragActive = true;
+            grabMouse();
+            raise();
+        }
+        moveInList(event->globalPosition().toPoint());
+        event->accept();
+        return;
+    }
+    QWidget::mouseMoveEvent(event);
+}
+
+void taskItem::mouseReleaseEvent(QMouseEvent *event)
+{
+    if (m_dragPending || m_dragActive) {
+        const bool save = m_dragActive && event->button() == Qt::LeftButton;
+        finishDrag(save);
+        event->accept();
+        return;
+    }
+    QWidget::mouseReleaseEvent(event);
 }

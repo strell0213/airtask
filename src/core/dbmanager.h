@@ -11,6 +11,10 @@
 
 class dbmanager
 {
+public:
+    // Порядок для вкладки «Все» (отдельно от порядка внутри проекта)
+    static constexpr int OrderProjectAll = -1;
+
 private:
     QSqlDatabase m_db;
     void connectDatabase();
@@ -19,9 +23,16 @@ private:
 public:
     dbmanager(QString nameDB);
 
-    void UpdateTasks(QVector<task> &m_tasks); //Передаем адресс переменной в стеке
+    void UpdateTasks(QVector<task> &m_tasks, int orderProjectId = OrderProjectAll);
     void AddTaskToDB(task newTask);
     void DeleteTaskFromDB(task t);
+
+    void AddTaskOrder(int taskId, int projectId, int numpp);
+    void DeleteTaskOrder(int taskId, int projectId);
+    void UpdateTaskOrder(int taskId, int orderProjectId, int order);
+    void SetTaskOrder(int taskId, int orderProjectId, int numpp);
+    int GetNextNumpp(int projectId);
+    void NormalizeTaskOrder(int projectId);
 
     void UpdateProjects(QVector<projects> &projects);
     QVector<QString> GetListNameProjects();
