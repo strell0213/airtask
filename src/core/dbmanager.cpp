@@ -333,3 +333,79 @@ int dbmanager::CreateProjectByName(QString name)
         return query.lastInsertId().toInt();
     }
 }
+
+void dbmanager::UpdateSettings(QVector<setting> &settings)
+{
+    settings.clear();
+
+    QSqlQuery query;
+    if (!query.exec("SELECT * FROM settings")) {
+        qDebug() << "Ошибка запроса:" << query.lastError().text();
+        return;
+    }
+
+    while(query.next())
+    {
+        setting s;
+        s.ID = query.value("ID").toInt();
+        s.SKey = query.value("SKey").toString();
+        s.SValue = query.value("SValue").toString();
+
+        settings.push_back(s);
+    }
+
+    CheckSettings(settings);
+}
+
+void dbmanager::CheckSettings(QVector<setting> &settings)
+{
+    bool update = false;
+
+    bool opacity = false;
+
+    for (const setting s : settings)
+    {
+        if(s.SKey == "OpacityApp") opacity = true;
+    }
+
+    if(!opacity)
+    {
+        update=true;
+        AddSetting("OpacityApp", "100");
+    }
+
+    if (update) UpdateSettings(settings);
+    else return;
+}
+
+void dbmanager::AddSetting(QString name, QString value)
+{
+    QSqlQuery query;
+
+    query.prepare("INSERT INTO settings (SKey, SValue) VALUES (:key, :value)");
+    query.bindValue(":key", name);
+    query.bindValue(":value", value);
+
+    if (!query.exec()) {
+        qDebug() << "INSERT Error:" << query.lastError().text();
+        return;
+    } else {
+        return;
+    }
+}
+
+void dbmanager::UpdateSetting(setting s)
+{
+    QSqlQuery query;
+
+    query.prepare("UPDATE settings SET SValue = :value WHERE SKey = :key");
+    query.bindValue(":key", s.SKey);
+    query.bindValue(":value", s.SValue);
+
+    if (!query.exec()) {
+        qDebug() << "UPDATE Error:" << query.lastError().text();
+        return;
+    } else {
+        return;
+    }
+}

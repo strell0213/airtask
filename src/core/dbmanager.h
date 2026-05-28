@@ -8,6 +8,7 @@
 
 #include "../src/core/models/task.h"
 #include "../src/core/models/projects.h"
+#include "../src/core/models/setting.h"
 
 class dbmanager
 {
@@ -39,6 +40,11 @@ public:
     int GetFindProjectOrCreateID(QString name);
     int GetFindProject(QString name);
     int CreateProjectByName(QString name);
+
+    void UpdateSettings(QVector<setting> &settings);
+    void CheckSettings(QVector<setting> &settings);
+    void AddSetting(QString name, QString value);
+    void UpdateSetting(setting s);
 };
 
 #endif // DBMANAGER_H

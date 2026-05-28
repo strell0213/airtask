@@ -12,6 +12,7 @@
 #include "../src/core/models/task.h"
 #include "../src/core/models/projects.h"
 #include "../src/core/models/tags.h"
+#include "../src/core/models/setting.h"
 #include "../src/core/dbmanager.h"
 #include "../src/core/traymanager.h"
 #include "../src/ui/taskitem.h"
@@ -68,6 +69,9 @@ private:
     //projects
     int m_currentProjectId = -1;  // -1 = все проекты
 
+    //settings
+    setting GetSettingByKey(QString key);
+
     void initMainWindow();
     void initSettings();
     void initAddLayout();
@@ -81,6 +85,7 @@ private:
     QVector<task> m_task;   //Список задач
     QVector<projects> m_projects;  //Список проектов
     QVector<tags> m_tags;   //Список меток
+    QVector<setting> m_settings; //Список настроек
 
     dbmanager *m_dbmanager; //Движок для работы с базой
 

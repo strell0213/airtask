@@ -38,6 +38,11 @@ MainWindow::MainWindow(QWidget *parent)
 
     m_traymanager = new traymanager();
     m_traymanager->createTrayIcon(this);
+
+    settingsScreen = new QWidget();
+    settingsScreen->setObjectName("settingsScreen");
+    initSettings();
+    stackedWidget->addWidget(settingsScreen);
 }
 
 MainWindow::~MainWindow()
@@ -144,11 +149,6 @@ void MainWindow::initMainWindow()
 
     taskListScreen->setWidget(m_scrollContent);
     stackedWidget->addWidget(taskListScreen);
-
-    settingsScreen = new QWidget();
-    settingsScreen->setObjectName("settingsScreen");
-    initSettings();
-    stackedWidget->addWidget(settingsScreen);
 }
 
 void MainWindow::initAddLayout()
@@ -210,12 +210,50 @@ void MainWindow::initAddLayout()
 
 void MainWindow::initSettings()
 {
+    m_dbmanager->UpdateSettings(m_settings);
+
     QVBoxLayout *layout = new QVBoxLayout(settingsScreen);
+    layout->setContentsMargins(10,10,10,25);
 
     QLabel *label = new QLabel("Настройки программы", settingsScreen);
     label->setStyleSheet("color: white; font-size: 18px;");
 
+    //прозрачность
+    setting opacityS = GetSettingByKey("OpacityApp");
+
+    QWidget *opacityWidget = new QWidget(settingsScreen);
+    QVBoxLayout *opacityLayout = new QVBoxLayout(opacityWidget);
+    opacityLayout->setContentsMargins(0,15,0,5);
+
+    QLabel *opacityLabel = new QLabel("Прозрачность", opacityWidget);
+    opacityLabel->setStyleSheet("color: white; font-size: 14px");
+
+    QSlider *slider = new QSlider(Qt::Horizontal, opacityWidget);
+    slider->setMinimum(20);
+    slider->setMaximum(100);
+    slider->setValue(opacityS.SValue.toInt());
+    setWindowOpacity(opacityS.SValue.toInt() / 100.0);
+
+    connect(slider, &QSlider::valueChanged, this, [this](int value){
+        setWindowOpacity(value / 100.0);
+    });
+
+    connect(slider, &QSlider::sliderReleased, this, [this, slider](){
+        setting opacityS = GetSettingByKey("OpacityApp");
+        setWindowOpacity(slider->value() / 100.0);
+        opacityS.SValue = QString::number(slider->value());
+        m_dbmanager->UpdateSetting(opacityS);
+    });
+
+    opacityLayout->addWidget(opacityLabel);
+    opacityLayout->addWidget(slider);
+    //прозрачность
+
+
+
+
     layout->addWidget(label);
+    layout->addWidget(opacityWidget);
     layout->addStretch();
 }
 
@@ -427,5 +465,15 @@ void MainWindow::ReorderTasks(QList<taskItem*> items, int orderProjectId)
 
     m_dbmanager->NormalizeTaskOrder(orderProjectId);
     UpdateListTask();
+}
+
+setting MainWindow::GetSettingByKey(QString key)
+{
+    for(setting s : m_settings)
+    {
+        if(s.SKey == key) return s;
+    }
+
+    return {};
 }
 
