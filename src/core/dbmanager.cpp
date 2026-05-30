@@ -362,16 +362,40 @@ void dbmanager::CheckSettings(QVector<setting> &settings)
     bool update = false;
 
     bool opacity = false;
+    bool posWindowX = false;
+    bool posWindowY = false;
+    bool notify = false;
 
     for (const setting s : settings)
     {
         if(s.SKey == "OpacityApp") opacity = true;
+        if(s.SKey == "PosWindowX") posWindowX = true;
+        if(s.SKey == "PosWindowY") posWindowY = true;
+        if(s.SKey == "Notify") notify = true;
     }
 
     if(!opacity)
     {
         update=true;
         AddSetting("OpacityApp", "100");
+    }
+
+    if(!posWindowX)
+    {
+        update=true;
+        AddSetting("PosWindowX", "0");
+    }
+
+    if(!posWindowX)
+    {
+        update=true;
+        AddSetting("PosWindowY", "0");
+    }
+
+    if(!notify)
+    {
+        update=true;
+        AddSetting("Notify", "1");
     }
 
     if (update) UpdateSettings(settings);

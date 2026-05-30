@@ -18,6 +18,7 @@
 #include "../src/ui/taskitem.h"
 #include <QStackedWidget>
 #include <QScrollArea>
+#include <QTimer>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -32,8 +33,10 @@ class MainWindow : public QMainWindow
 public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow() override;
-    void UpdateListTask();
+    void UpdateListTask(bool updateDB = true);
     void UpdateProjectTabs();
+    void UpdateAllList();
+    void UpdateSettings();
     void ReorderTasks(QList<taskItem*> items, int projectId);
 private slots:
     void onTaskOrderChanged();
@@ -91,5 +94,11 @@ private:
 
     void ShowDatePickerPopup();
     QList<taskItem*> collectVisibleTaskItems() const;
+
+    //уведомления
+    bool m_notify;
+    QTimer *m_notifyTimer;
+    void CheckDeadlines();
+    QMap<int, QSet<int>> m_notifiedTasks;
 };
 #endif // MAINWINDOW_H

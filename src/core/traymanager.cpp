@@ -47,3 +47,13 @@ bool traymanager::checkIcon() {
     // Проверяем, активна ли иконка в трее
     return (this->trayIcon && this->trayIcon->isVisible());
 }
+
+void traymanager::ShowMessage(QString mes)
+{
+    trayIcon->showMessage(
+        "AirTask",                                          // заголовок
+        mes, // текст
+        QSystemTrayIcon::Information,                       // иконка
+        5000                                                // показывать 5 сек
+        );
+}

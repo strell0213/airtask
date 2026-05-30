@@ -3,6 +3,8 @@
 
 #include <QSystemTrayIcon>
 
+#include "../src/core/models/task.h"
+
 
 class MainWindow;
 
@@ -15,6 +17,7 @@ public:
 
     void createTrayIcon(MainWindow *mainWindow);
     bool checkIcon();
+    void ShowMessage(QString mes);
 };
 
 #endif // TRAYMANAGER_H

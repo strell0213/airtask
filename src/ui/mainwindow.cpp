@@ -33,16 +33,20 @@ MainWindow::MainWindow(QWidget *parent)
     loadStyle();
 
     m_dbmanager = new dbmanager("airtask.db");
-    UpdateListTask();
-    UpdateProjectTabs();
+    UpdateAllList();
 
     m_traymanager = new traymanager();
     m_traymanager->createTrayIcon(this);
 
     settingsScreen = new QWidget();
     settingsScreen->setObjectName("settingsScreen");
+    UpdateSettings();
     initSettings();
     stackedWidget->addWidget(settingsScreen);
+
+    m_notifyTimer = new QTimer(this);
+    connect(m_notifyTimer, &QTimer::timeout, this, &MainWindow::CheckDeadlines);
+    m_notifyTimer->start(10000); // каждые 10 секунд
 }
 
 MainWindow::~MainWindow()
@@ -210,8 +214,6 @@ void MainWindow::initAddLayout()
 
 void MainWindow::initSettings()
 {
-    m_dbmanager->UpdateSettings(m_settings);
-
     QVBoxLayout *layout = new QVBoxLayout(settingsScreen);
     layout->setContentsMargins(10,10,10,25);
 
@@ -249,11 +251,32 @@ void MainWindow::initSettings()
     opacityLayout->addWidget(slider);
     //прозрачность
 
+    //уведомления
+    setting sNotify = GetSettingByKey("Notify");
+    QWidget *notifyWidget = new QWidget(settingsScreen);
+    QVBoxLayout *notifyLayout = new QVBoxLayout(notifyWidget);
+    notifyLayout->setContentsMargins(0,15,0,5);
 
+    QLabel *notifyLabel = new QLabel("Уведомления", notifyWidget);
+    notifyLabel->setStyleSheet("color: white; font-size: 14px");
+
+    QCheckBox *notifyCheck = new QCheckBox(notifyWidget);
+    notifyCheck->setText("Показывать уведомления по дедлайнам");
+    notifyCheck->setChecked((sNotify.SValue == "1") ? true : false);
+    connect(notifyCheck, &QCheckBox::checkStateChanged, this, [this](bool value){
+        setting sNotify = GetSettingByKey("Notify");
+        sNotify.SValue = (value) ? "1" : "0";
+        m_dbmanager->UpdateSetting(sNotify);
+    });
+
+    notifyLayout->addWidget(notifyLabel);
+    notifyLayout->addWidget(notifyCheck);
+    //уведомления
 
 
     layout->addWidget(label);
     layout->addWidget(opacityWidget);
+    layout->addWidget(notifyWidget);
     layout->addStretch();
 }
 
@@ -265,6 +288,27 @@ void MainWindow::loadStyle()
         this->setStyleSheet(styleSheet);
         file.close();
     }
+}
+
+void MainWindow::UpdateSettings()
+{
+    m_dbmanager->UpdateSettings(m_settings);
+
+    setting posWindowX = GetSettingByKey("PosWindowX");
+    setting posWindowY = GetSettingByKey("PosWindowY");
+    int x = posWindowX.SValue.toInt();
+    int y = posWindowY.SValue.toInt();
+    if (x == 0 && y == 0) {
+        // Центр экрана по умолчанию
+        QScreen *screen = QGuiApplication::primaryScreen();
+        QRect screenGeometry = screen->geometry();
+        x = (screenGeometry.width() - width()) / 2;
+        y = (screenGeometry.height() - height()) / 2;
+    }
+    move(posWindowX.SValue.toInt(), posWindowY.SValue.toInt());
+
+    setting sNotify = GetSettingByKey("Notify");
+    m_notify = (sNotify.SValue == "1") ? true : false;
 }
 
 void MainWindow::onAddTaskButtonOnClick()
@@ -288,6 +332,12 @@ void MainWindow::onAddTaskButtonToDBOnClick()
     m_dbmanager->AddTaskToDB(addtask);
 
     inputContainer->setVisible(false);
+    UpdateAllList();
+}
+
+void MainWindow::UpdateAllList()
+{
+    UpdateProjectTabs();
     UpdateListTask();
 }
 
@@ -322,9 +372,10 @@ void MainWindow::UpdateProjectTabs()
     tabsLayout->addStretch();
 }
 
-void MainWindow::UpdateListTask()
+void MainWindow::UpdateListTask(bool updateDb)
 {
-    m_dbmanager->UpdateTasks(m_task, m_currentProjectId);
+    if (updateDb)
+        m_dbmanager->UpdateTasks(m_task, m_currentProjectId);
 
     while (scrollLayout->count() > 1) {
         QLayoutItem* item = scrollLayout->takeAt(0); // Берем самый верхний элемент
@@ -342,7 +393,7 @@ void MainWindow::UpdateListTask()
         // Создаем наш кастомный виджет
         taskItem *item = new taskItem(t, m_dbmanager, m_scrollContent);
 
-        connect(item, &taskItem::deleteRequested, this, &MainWindow::UpdateListTask);
+        connect(item, &taskItem::deleteRequested, this, &MainWindow::UpdateAllList);
         connect(item, &taskItem::orderChanged, this, &MainWindow::onTaskOrderChanged);
 
         // Вставляем его в Layout
@@ -385,6 +436,15 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
 
         else if (event->type() == QEvent::MouseButtonRelease) {
             m_dragging = false;
+
+            QPoint pos = frameGeometry().topLeft();
+            setting posWindowX = GetSettingByKey("PosWindowX");
+            setting posWindowY = GetSettingByKey("PosWindowY");
+            posWindowX.SValue = QString::number(pos.x());
+            posWindowY.SValue = QString::number(pos.y());
+            m_dbmanager->UpdateSetting(posWindowX);
+            m_dbmanager->UpdateSetting(posWindowY);
+
             return true;
         }
     }
@@ -475,5 +535,46 @@ setting MainWindow::GetSettingByKey(QString key)
     }
 
     return {};
+}
+
+void MainWindow::CheckDeadlines()
+{
+    if (!m_notify)
+    {
+        UpdateListTask(false);
+        return;
+    }
+
+    QDateTime now = QDateTime::currentDateTime();
+
+    QList<int> minutes = {60, 30, 0};
+
+    for(const task t : m_task)
+    {
+        if (!t.deadline.isValid()) continue;
+        if (t.is_completed) continue;
+
+        int minuteLeft = now.secsTo(t.deadline) / 60;
+
+        for (int minute : minutes)
+        {
+            if (m_notifiedTasks[t.id].contains(minute)) continue;
+
+            if(minuteLeft <= minute && minuteLeft > minute - 10)
+            {
+                QString mes;
+
+                if (minute == 0)
+                    mes = QString("«%1» — дедлайн сейчас!").arg(t.title);
+                else
+                    mes = QString("«%1» через %2 мин").arg(t.title).arg(minute);
+
+                m_traymanager->ShowMessage(mes);
+
+                m_notifiedTasks[t.id].insert(minute);
+            }
+        }
+    }
+    UpdateListTask(false);
 }
 
