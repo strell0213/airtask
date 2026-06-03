@@ -365,6 +365,7 @@ void dbmanager::CheckSettings(QVector<setting> &settings)
     bool posWindowX = false;
     bool posWindowY = false;
     bool notify = false;
+    bool startUp = false;
 
     for (const setting s : settings)
     {
@@ -372,6 +373,7 @@ void dbmanager::CheckSettings(QVector<setting> &settings)
         if(s.SKey == "PosWindowX") posWindowX = true;
         if(s.SKey == "PosWindowY") posWindowY = true;
         if(s.SKey == "Notify") notify = true;
+        if(s.SKey == "StartUp") startUp = true;
     }
 
     if(!opacity)
@@ -396,6 +398,12 @@ void dbmanager::CheckSettings(QVector<setting> &settings)
     {
         update=true;
         AddSetting("Notify", "1");
+    }
+
+    if (!startUp)
+    {
+        update=true;
+        AddSetting("StartUp", "0");
     }
 
     if (update) UpdateSettings(settings);

@@ -38,6 +38,8 @@ MainWindow::MainWindow(QWidget *parent)
     m_traymanager = new traymanager();
     m_traymanager->createTrayIcon(this);
 
+    m_settingManager = new settingsmanager();
+
     settingsScreen = new QWidget();
     settingsScreen->setObjectName("settingsScreen");
     UpdateSettings();
@@ -215,17 +217,18 @@ void MainWindow::initAddLayout()
 void MainWindow::initSettings()
 {
     QVBoxLayout *layout = new QVBoxLayout(settingsScreen);
-    layout->setContentsMargins(10,10,10,25);
+    layout->setContentsMargins(10,10,10,30);
 
     QLabel *label = new QLabel("Настройки программы", settingsScreen);
     label->setStyleSheet("color: white; font-size: 18px;");
 
     //прозрачность
     setting opacityS = GetSettingByKey("OpacityApp");
+    setting startUp = GetSettingByKey("StartUp");
 
     QWidget *opacityWidget = new QWidget(settingsScreen);
     QVBoxLayout *opacityLayout = new QVBoxLayout(opacityWidget);
-    opacityLayout->setContentsMargins(0,15,0,5);
+    opacityLayout->setContentsMargins(0,5,0,10);
 
     QLabel *opacityLabel = new QLabel("Прозрачность", opacityWidget);
     opacityLabel->setStyleSheet("color: white; font-size: 14px");
@@ -247,15 +250,27 @@ void MainWindow::initSettings()
         m_dbmanager->UpdateSetting(opacityS);
     });
 
+    QCheckBox *startUpCheck = new QCheckBox(opacityWidget);
+    startUpCheck->setText("Запускать программу при запуске системы");
+    startUpCheck->setChecked((startUp.SValue == "1") ? true : false);
+    connect(startUpCheck, &QCheckBox::checkStateChanged, this, [this](bool value){
+        m_settingManager->SetAutostart(value);
+
+        setting startUp = GetSettingByKey("StartUp");
+        startUp.SValue =(value) ? "1" : "0";
+        m_dbmanager->UpdateSetting(startUp);
+    });
+
     opacityLayout->addWidget(opacityLabel);
     opacityLayout->addWidget(slider);
+    opacityLayout->addWidget(startUpCheck);
     //прозрачность
 
     //уведомления
     setting sNotify = GetSettingByKey("Notify");
     QWidget *notifyWidget = new QWidget(settingsScreen);
     QVBoxLayout *notifyLayout = new QVBoxLayout(notifyWidget);
-    notifyLayout->setContentsMargins(0,15,0,5);
+    notifyLayout->setContentsMargins(0,0,0,10);
 
     QLabel *notifyLabel = new QLabel("Уведомления", notifyWidget);
     notifyLabel->setStyleSheet("color: white; font-size: 14px");

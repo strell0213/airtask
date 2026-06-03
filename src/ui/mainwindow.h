@@ -16,6 +16,7 @@
 #include "../src/core/dbmanager.h"
 #include "../src/core/traymanager.h"
 #include "../src/ui/taskitem.h"
+#include "../src/core/settingsmanager.h"
 #include <QStackedWidget>
 #include <QScrollArea>
 #include <QTimer>
@@ -91,6 +92,8 @@ private:
     QVector<setting> m_settings; //Список настроек
 
     dbmanager *m_dbmanager; //Движок для работы с базой
+
+    settingsmanager *m_settingManager;
 
     void ShowDatePickerPopup();
     QList<taskItem*> collectVisibleTaskItems() const;
