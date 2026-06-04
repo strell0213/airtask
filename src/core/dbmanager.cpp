@@ -130,6 +130,26 @@ void dbmanager::DeleteTaskFromDB(task t)
     NormalizeTaskOrder(OrderProjectAll);
 }
 
+void dbmanager::CompleteTask(bool complete, task &ctask)
+{
+    QSqlQuery query;
+    query.prepare("UPDATE tasks "
+                  "SET is_completed = :is_completed "
+                  "WHERE id = :id");
+    query.bindValue(":is_completed", complete);
+    query.bindValue(":id", ctask.id);
+
+
+    if (!query.exec()) {
+        qDebug() << "UPDATE tasks Error:" << query.lastError().text();
+    }
+    else
+    {
+        ctask.is_completed = complete;
+        return;
+    }
+}
+
 void dbmanager::SetTaskOrder(int taskId, int orderProjectId, int numpp)
 {
     QSqlQuery check;

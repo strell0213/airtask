@@ -29,6 +29,7 @@ public:
     void DeleteTaskFromDB(task t);
 
     void AddTaskOrder(int taskId, int projectId, int numpp);
+    void CompleteTask(bool complete, task &cTask);
     void DeleteTaskOrder(int taskId, int projectId);
     void UpdateTaskOrder(int taskId, int orderProjectId, int order);
     void SetTaskOrder(int taskId, int orderProjectId, int numpp);

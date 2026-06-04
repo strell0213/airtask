@@ -23,13 +23,25 @@ taskItem::taskItem(task t, dbmanager *dbm, QWidget *parent) : QWidget(parent)
 
     m_checkBox = new QCheckBox(this);
     m_checkBox->setChecked(m_Task.is_completed);
+    connect(m_checkBox, &QCheckBox::checkStateChanged, this, [this](bool value){
+        m_db->CompleteTask(value, m_Task);
+
+        if(value)
+            m_titleLabel->setStyleSheet("color: grey; font-size: 16px; font-weight: 500; text-decoration: line-through;");
+        else
+            m_titleLabel->setStyleSheet("color: white; font-size: 16px; font-weight: 500;");
+
+    });
 
     // --- СОЗДАЕМ ВЕРТИКАЛЬНЫЙ БЛОК ДЛЯ ТЕКСТА ---
     QVBoxLayout *textLayout = new QVBoxLayout();
     textLayout->setSpacing(4); // Расстояние между заголовком и тегом
 
     m_titleLabel = new QLabel(m_Task.title, this);
-    m_titleLabel->setStyleSheet("color: white; font-size: 16px; font-weight: 500;");
+    if(m_Task.is_completed)
+        m_titleLabel->setStyleSheet("color: grey; font-size: 16px; font-weight: 500; text-decoration: line-through;");
+    else
+        m_titleLabel->setStyleSheet("color: white; font-size: 16px; font-weight: 500;");
 
     // Создаем метку для тегов
     QHBoxLayout *textHLayout = new QHBoxLayout();
