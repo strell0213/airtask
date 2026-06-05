@@ -4,6 +4,9 @@
 #include <QAbstractButton>
 #include <QScrollArea>
 #include <QScrollBar>
+#include <QCalendarWidget>
+#include <QDialog>
+#include <QTimeEdit>
 
 namespace {
 constexpr int kDragThreshold = 6;
@@ -51,10 +54,13 @@ taskItem::taskItem(task t, dbmanager *dbm, QWidget *parent) : QWidget(parent)
     tagLabel->setObjectName("tagLabel"); // Даем имя для стилизации в QSS
 
     QString deadlineText = m_Task.getDeadlineText();
-    QLabel *deadlineLabel = new QLabel(deadlineText, this);
-    deadlineLabel->setObjectName("deadlineLabel");
+    m_deadlineLabel = new ClickedLabel(this);
+    m_deadlineLabel->setText(deadlineText);
+    m_deadlineLabel->setObjectName("deadlineLabel");
+    connect(m_deadlineLabel, &ClickedLabel::clicked, this, &taskItem::ShowDatePickerForEditDeadline);
+
     textHLayout->addWidget(tagLabel);
-    textHLayout->addWidget(deadlineLabel);
+    textHLayout->addWidget(m_deadlineLabel);
 
     textLayout->addWidget(m_titleLabel);
     textLayout->addLayout(textHLayout);
@@ -83,7 +89,7 @@ void taskItem::paintEvent(QPaintEvent * /*event*/)
 void taskItem::onDeleteBtnClick()
 {
     m_db->DeleteTaskFromDB(m_Task);
-    emit deleteRequested();
+    emit updateRequested();
 }
 
 bool taskItem::isDragHandle(const QPoint &pos) const
@@ -204,4 +210,53 @@ void taskItem::mouseReleaseEvent(QMouseEvent *event)
         return;
     }
     QWidget::mouseReleaseEvent(event);
+}
+
+
+//изменение данных
+void taskItem::ShowDatePickerForEditDeadline()
+{
+    QDialog *popup = new QDialog(this);
+    popup->setWindowFlags(Qt::Popup);
+    popup->setFixedWidth(300);
+
+    QVBoxLayout *layout = new QVBoxLayout(popup);
+    layout->setContentsMargins(8, 8, 8, 8);
+
+    // Календарь
+    QCalendarWidget *calendar = new QCalendarWidget(popup);
+    calendar->setSelectedDate(m_Task.deadline.date());
+    layout->addWidget(calendar);
+
+    // Выбор времени
+    QHBoxLayout *timeLayout = new QHBoxLayout();
+    QLabel *timeLabel = new QLabel("Время:", popup);
+    QTimeEdit *timeEdit = new QTimeEdit(popup);
+    timeEdit->setTime(m_Task.deadline.time());
+    timeEdit->setDisplayFormat("HH:mm");
+    timeLayout->addWidget(timeLabel);
+    timeLayout->addWidget(timeEdit);
+    layout->addLayout(timeLayout);
+
+    // Кнопка подтверждения
+    QPushButton *btnOk = new QPushButton("Готово", popup);
+    layout->addWidget(btnOk);
+
+    connect(btnOk, &QPushButton::clicked, [=]() {
+        QDateTime selected;
+        selected.setDate(calendar->selectedDate());
+        selected.setTime(timeEdit->time());
+
+        m_Task.deadline.setDate(selected.date());
+        m_Task.deadline.setTime(selected.time());
+        m_db->UpdateTaskChanged(m_Task);
+
+        popup->close();
+        emit updateRequested();
+    });
+
+    // // Показываем под кнопкой-календарём
+    // QPoint pos = btnCalendar->mapToGlobal(QPoint(0, btnCalendar->height()));
+    // popup->move(pos);
+    // popup->exec();
 }

@@ -109,6 +109,28 @@ void dbmanager::AddTaskToDB(task newTask)
     }
 }
 
+void dbmanager::UpdateTaskChanged(task t)
+{
+    QSqlQuery query;
+
+    query.prepare("UPDATE tasks SET "
+                  "title = :title,"
+                  "tags = :tags,"
+                  "deadline = :deadline"
+                  " WHERE id = :id");
+
+    query.bindValue(":title", t.title);
+    query.bindValue(":tags", t.tags);
+    query.bindValue(":deadline", t.deadline);
+    query.bindValue(":id", t.id);
+
+    if(!query.exec())
+    {
+        qDebug() << "UPDATE Error:" << query.lastError().text();
+    }
+    else return;
+}
+
 void dbmanager::DeleteTaskFromDB(task t)
 {
     QSqlQuery query;

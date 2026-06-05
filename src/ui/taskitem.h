@@ -10,6 +10,7 @@
 #include <QStyleOption>
 #include <QMouseEvent>
 #include <QPoint>
+#include "../src/core/models/clickedlabel.h"
 
 #include "../src/core/models/task.h"
 #include "../src/core/dbmanager.h"
@@ -34,6 +35,7 @@ private:
     QCheckBox *m_checkBox;
     QLabel *m_titleLabel;
     QPushButton *m_deleteBtn;
+    ClickedLabel *m_deadlineLabel;
 
     bool m_dragPending = false;
     bool m_dragActive = false;
@@ -45,8 +47,13 @@ private:
 
     void onDeleteBtnClick();
 
+    //изменение данных
+    void ShowDatePickerForEditDeadline();
+    void ShowTextEditForTitle();
+    void ShowComboBoxForColorTag();
+
 signals:
-    void deleteRequested();
+    void updateRequested();
     void orderChanged();
 };
 

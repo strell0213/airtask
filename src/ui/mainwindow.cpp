@@ -408,7 +408,7 @@ void MainWindow::UpdateListTask(bool updateDb)
         // Создаем наш кастомный виджет
         taskItem *item = new taskItem(t, m_dbmanager, m_scrollContent);
 
-        connect(item, &taskItem::deleteRequested, this, &MainWindow::UpdateAllList);
+        connect(item, &taskItem::updateRequested, this, &MainWindow::UpdateAllList);
         connect(item, &taskItem::orderChanged, this, &MainWindow::onTaskOrderChanged);
 
         // Вставляем его в Layout

@@ -26,10 +26,11 @@ public:
 
     void UpdateTasks(QVector<task> &m_tasks, int orderProjectId = OrderProjectAll);
     void AddTaskToDB(task newTask);
+    void CompleteTask(bool complete, task &cTask);
+    void UpdateTaskChanged(task t);
     void DeleteTaskFromDB(task t);
 
     void AddTaskOrder(int taskId, int projectId, int numpp);
-    void CompleteTask(bool complete, task &cTask);
     void DeleteTaskOrder(int taskId, int projectId);
     void UpdateTaskOrder(int taskId, int orderProjectId, int order);
     void SetTaskOrder(int taskId, int orderProjectId, int numpp);
