@@ -57,7 +57,10 @@ taskItem::taskItem(task t, dbmanager *dbm, QWidget *parent) : QWidget(parent)
     m_deadlineLabel = new ClickedLabel(this);
     m_deadlineLabel->setText(deadlineText);
     m_deadlineLabel->setObjectName("deadlineLabel");
-    connect(m_deadlineLabel, &ClickedLabel::clicked, this, &taskItem::ShowDatePickerForEditDeadline);
+    connect(m_deadlineLabel, &ClickedLabel::clicked, this, [this]() {
+        qDebug() << "Лямбда сработала! Пытаюсь вызвать метод напрямую...";
+        this->ShowDatePickerForEditDeadline();
+    });
 
     textHLayout->addWidget(tagLabel);
     textHLayout->addWidget(m_deadlineLabel);
@@ -242,6 +245,9 @@ void taskItem::ShowDatePickerForEditDeadline()
     QPushButton *btnOk = new QPushButton("Готово", popup);
     layout->addWidget(btnOk);
 
+    // Чтобы окно удалялось из памяти после закрытия
+    popup->setAttribute(Qt::WA_DeleteOnClose);
+
     connect(btnOk, &QPushButton::clicked, [=]() {
         QDateTime selected;
         selected.setDate(calendar->selectedDate());
@@ -255,8 +261,12 @@ void taskItem::ShowDatePickerForEditDeadline()
         emit updateRequested();
     });
 
-    // // Показываем под кнопкой-календарём
-    // QPoint pos = btnCalendar->mapToGlobal(QPoint(0, btnCalendar->height()));
-    // popup->move(pos);
-    // popup->exec();
+    // --- ВОТ ЭТОТ КУСОК ОЖИВЛЯЕТ ОКНО ---
+
+    // Показываем ровно под нажатым лейблом (m_deadlineLabel)
+    QPoint pos = m_deadlineLabel->mapToGlobal(QPoint(0, m_deadlineLabel->height()));
+    popup->move(pos);
+
+    // Запускаем модальный диалог (он отобразится на экране!)
+    popup->exec();
 }

@@ -17,6 +17,7 @@ signals:
 protected:
     void mousePressEvent(QMouseEvent* event) override {
         if (event->button() == Qt::LeftButton) {
+            qDebug() << "1. Физический клик по лейблу зафиксирован!";
             emit clicked(); // Генерируем сигнал при клике левой кнопкой
         }
         QLabel::mousePressEvent(event); // Передаем событие дальше базовому классу
