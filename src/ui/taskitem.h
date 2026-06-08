@@ -10,7 +10,6 @@
 #include <QStyleOption>
 #include <QMouseEvent>
 #include <QPoint>
-#include "../src/core/models/clickedlabel.h"
 
 #include "../src/core/models/task.h"
 #include "../src/core/dbmanager.h"
@@ -28,6 +27,7 @@ protected:
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
+    bool eventFilter(QObject *obj, QEvent *event) override;
 private:
     task m_Task;
     dbmanager *m_db;
@@ -35,7 +35,8 @@ private:
     QCheckBox *m_checkBox;
     QLabel *m_titleLabel;
     QPushButton *m_deleteBtn;
-    ClickedLabel *m_deadlineLabel;
+
+    QLabel  *m_deadlineLabel;
 
     bool m_dragPending = false;
     bool m_dragActive = false;

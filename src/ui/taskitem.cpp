@@ -54,13 +54,11 @@ taskItem::taskItem(task t, dbmanager *dbm, QWidget *parent) : QWidget(parent)
     tagLabel->setObjectName("tagLabel"); // Даем имя для стилизации в QSS
 
     QString deadlineText = m_Task.getDeadlineText();
-    m_deadlineLabel = new ClickedLabel(this);
+    m_deadlineLabel = new QLabel(this);
     m_deadlineLabel->setText(deadlineText);
     m_deadlineLabel->setObjectName("deadlineLabel");
-    connect(m_deadlineLabel, &ClickedLabel::clicked, this, [this]() {
-        qDebug() << "Лямбда сработала! Пытаюсь вызвать метод напрямую...";
-        this->ShowDatePickerForEditDeadline();
-    });
+    m_deadlineLabel->installEventFilter(this);
+    // connect(m_deadlineLabel, &ClickableLabel::clicked, this, &taskItem::ShowDatePickerForEditDeadline);
 
     textHLayout->addWidget(tagLabel);
     textHLayout->addWidget(m_deadlineLabel);
@@ -80,6 +78,14 @@ taskItem::taskItem(task t, dbmanager *dbm, QWidget *parent) : QWidget(parent)
     mainLayout->addWidget(m_deleteBtn);
 }
 
+bool taskItem::eventFilter(QObject *obj, QEvent *event)
+{
+    if (m_deadlineLabel != nullptr && obj == m_deadlineLabel && event->type() == QEvent::MouseButtonPress) {
+        ShowDatePickerForEditDeadline();
+        return true;
+    }
+    return QWidget::eventFilter(obj, event);
+}
 
 void taskItem::paintEvent(QPaintEvent * /*event*/)
 {
@@ -222,20 +228,23 @@ void taskItem::ShowDatePickerForEditDeadline()
     QDialog *popup = new QDialog(this);
     popup->setWindowFlags(Qt::Popup);
     popup->setFixedWidth(300);
-
     QVBoxLayout *layout = new QVBoxLayout(popup);
     layout->setContentsMargins(8, 8, 8, 8);
 
     // Календарь
     QCalendarWidget *calendar = new QCalendarWidget(popup);
-    calendar->setSelectedDate(m_Task.deadline.date());
+    if (!m_Task.deadline.isNull()) {
+        calendar->setSelectedDate(m_Task.deadline.date());
+    }
     layout->addWidget(calendar);
 
     // Выбор времени
     QHBoxLayout *timeLayout = new QHBoxLayout();
     QLabel *timeLabel = new QLabel("Время:", popup);
     QTimeEdit *timeEdit = new QTimeEdit(popup);
-    timeEdit->setTime(m_Task.deadline.time());
+    if (!m_Task.deadline.isNull()) {
+        timeEdit->setTime(m_Task.deadline.time());
+    }
     timeEdit->setDisplayFormat("HH:mm");
     timeLayout->addWidget(timeLabel);
     timeLayout->addWidget(timeEdit);
@@ -244,9 +253,6 @@ void taskItem::ShowDatePickerForEditDeadline()
     // Кнопка подтверждения
     QPushButton *btnOk = new QPushButton("Готово", popup);
     layout->addWidget(btnOk);
-
-    // Чтобы окно удалялось из памяти после закрытия
-    popup->setAttribute(Qt::WA_DeleteOnClose);
 
     connect(btnOk, &QPushButton::clicked, [=]() {
         QDateTime selected;
@@ -261,12 +267,8 @@ void taskItem::ShowDatePickerForEditDeadline()
         emit updateRequested();
     });
 
-    // --- ВОТ ЭТОТ КУСОК ОЖИВЛЯЕТ ОКНО ---
-
-    // Показываем ровно под нажатым лейблом (m_deadlineLabel)
+    // Показываем под лейблом
     QPoint pos = m_deadlineLabel->mapToGlobal(QPoint(0, m_deadlineLabel->height()));
     popup->move(pos);
-
-    // Запускаем модальный диалог (он отобразится на экране!)
     popup->exec();
 }
