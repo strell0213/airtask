@@ -7,6 +7,7 @@
 #include <QCalendarWidget>
 #include <QDialog>
 #include <QTimeEdit>
+#include <QLineEdit>
 
 namespace {
 constexpr int kDragThreshold = 6;
@@ -46,6 +47,8 @@ taskItem::taskItem(task t, dbmanager *dbm, QWidget *parent) : QWidget(parent)
     else
         m_titleLabel->setStyleSheet("color: white; font-size: 16px; font-weight: 500;");
 
+    m_titleLabel->installEventFilter(this);
+
     // Создаем метку для тегов
     QHBoxLayout *textHLayout = new QHBoxLayout();
     textHLayout->setSpacing(4);
@@ -82,6 +85,10 @@ bool taskItem::eventFilter(QObject *obj, QEvent *event)
 {
     if (m_deadlineLabel != nullptr && obj == m_deadlineLabel && event->type() == QEvent::MouseButtonPress) {
         ShowDatePickerForEditDeadline();
+        return true;
+    }
+    else if(m_titleLabel != nullptr && obj == m_titleLabel && event->type() == QEvent::MouseButtonPress) {
+        ShowTextEditForTitle();
         return true;
     }
     return QWidget::eventFilter(obj, event);
@@ -269,6 +276,42 @@ void taskItem::ShowDatePickerForEditDeadline()
 
     // Показываем под лейблом
     QPoint pos = m_deadlineLabel->mapToGlobal(QPoint(0, m_deadlineLabel->height()));
+    popup->move(pos);
+    popup->exec();
+}
+
+void taskItem::ShowTextEditForTitle()
+{
+    QDialog *popup = new QDialog(this);
+    popup->setWindowFlags(Qt::Popup);
+    popup->setFixedWidth(150);
+    QVBoxLayout *layout = new QVBoxLayout(popup);
+    layout->setContentsMargins(8,8,8,8);
+
+    QLineEdit *lineEdit = new QLineEdit(popup);
+    lineEdit->setObjectName("labelInput");
+    if(!m_Task.title.isNull()) {
+        lineEdit->setText(m_Task.title);
+    }
+
+    QPushButton *btnOk = new QPushButton("Готово", popup);
+
+    layout->addWidget(lineEdit);
+    layout->addWidget(btnOk);
+
+    connect(btnOk, &QPushButton::clicked, [=]() {
+        QString lineText;
+        lineText = lineEdit->text();
+
+        m_Task.title = lineText;
+        m_db->UpdateTaskChanged(m_Task);
+
+        popup->close();
+        emit updateRequested();
+    });
+
+    // Показываем под лейблом
+    QPoint pos = m_titleLabel->mapToGlobal(QPoint(0, m_titleLabel->height()));
     popup->move(pos);
     popup->exec();
 }
