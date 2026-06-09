@@ -22,21 +22,28 @@ file(GLOB_RECURSE PROJECT_SOURCES
     "src/*.h" 
     "src/*.ui" 
     "src/*.qrc"
-    "src/*.qrc"  # <-- Важно!
-    "src/*.qss"  # Можно добавить и qss для контроля
+    "src/*.qrc"
+    "src/*.qss"
+    "src/*.rc"
 )
 
 # 2. ДОБАВЛЯЕМ ПУТЬ К SRC В ИНКЛЮДЫ
 # Это позволит писать #include "ui/mainwindow.h" вместо полных путей
 include_directories(src)
 
+set(EXE_ICON "src/ui/app.rc")
+
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     qt_add_executable(AirTask
         MANUAL_FINALIZATION
         ${PROJECT_SOURCES}
+        ${EXE_ICON} # <-- Добавили сюда
     )
 else()
-    add_executable(AirTask ${PROJECT_SOURCES})
+    add_executable(AirTask
+        ${PROJECT_SOURCES}
+        ${EXE_ICON} # <-- И сюда
+    )
 endif()
 
 # Не забудь добавить Qt${QT_VERSION_MAJOR}::Sql здесь для БД
