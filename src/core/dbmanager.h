@@ -42,6 +42,7 @@ public:
     int GetFindProjectOrCreateID(QString name);
     int GetFindProject(QString name);
     int CreateProjectByName(QString name);
+    void DeleteProjectFromDB(int pId);
 
     void UpdateSettings(QVector<setting> &settings);
     void CheckSettings(QVector<setting> &settings);

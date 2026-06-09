@@ -96,6 +96,7 @@ private:
     settingsmanager *m_settingManager;
 
     void ShowDatePickerPopup();
+    void ShowProjectContextMenu(int btnId, const QPoint &pos);
     QList<taskItem*> collectVisibleTaskItems() const;
 
     //уведомления

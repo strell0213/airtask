@@ -376,6 +376,18 @@ int dbmanager::CreateProjectByName(QString name)
     }
 }
 
+void dbmanager::DeleteProjectFromDB(int pId)
+{
+    QSqlQuery query;
+    query.prepare("DELETE FROM projects WHERE id = :id");
+    query.bindValue(":id", pId);
+
+    if (!query.exec()) {
+        qDebug() << "DELETE Error:" << query.lastError().text();
+        return;
+    }
+}
+
 void dbmanager::UpdateSettings(QVector<setting> &settings)
 {
     settings.clear();

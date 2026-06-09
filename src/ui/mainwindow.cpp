@@ -384,6 +384,15 @@ void MainWindow::UpdateProjectTabs()
         tabsLayout->addWidget(btn);
     }
 
+    if (m_filterGroup) {
+        const QList<QAbstractButton*> buttons = m_filterGroup->buttons();
+        for (QAbstractButton *btn : buttons) {
+            if (btn) {  // Проверка на nullptr
+                btn->installEventFilter(this);
+            }
+        }
+    }
+
     tabsLayout->addStretch();
 }
 
@@ -428,33 +437,36 @@ void MainWindow::loadProjectsAddComboBox()
     }
 }
 
-bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
-    // Проверяем, что событие пришло именно от нашего titleLabel
-    if (obj->objectName() == "appTitle") {
+bool MainWindow::eventFilter(QObject *obj, QEvent *event)
+{
+    if (!obj || !event) {
+        return QMainWindow::eventFilter(obj, event);
+    }
 
+    // ===== ОБРАБОТКА ПЕРЕМЕЩЕНИЯ ОКНА =====
+    if (obj->objectName() == "appTitle") {
         if (event->type() == QEvent::MouseButtonPress) {
-            QMouseEvent *mouseEvent = static_cast<QMouseEvent*>(event);
-            if (mouseEvent->button() == Qt::LeftButton) {
+            QMouseEvent *mouseEvent = dynamic_cast<QMouseEvent*>(event);
+            if (mouseEvent && mouseEvent->button() == Qt::LeftButton) {
                 m_dragging = true;
-                // Запоминаем расстояние от курсора до левого верхнего угла окна
                 m_dragPos = mouseEvent->globalPos() - frameGeometry().topLeft();
-                return true; // Событие обработано
+                return true;
             }
         }
-
         else if (event->type() == QEvent::MouseMove && m_dragging) {
-            QMouseEvent *mouseEvent = static_cast<QMouseEvent*>(event);
-            // Перемещаем окно в новую позицию
-            move(mouseEvent->globalPos() - m_dragPos);
-            return true;
+            QMouseEvent *mouseEvent = dynamic_cast<QMouseEvent*>(event);
+            if (mouseEvent) {
+                move(mouseEvent->globalPos() - m_dragPos);
+                return true;
+            }
         }
-
-        else if (event->type() == QEvent::MouseButtonRelease) {
+        else if (event->type() == QEvent::MouseButtonRelease && m_dragging) {
             m_dragging = false;
-
             QPoint pos = frameGeometry().topLeft();
+
             setting posWindowX = GetSettingByKey("PosWindowX");
             setting posWindowY = GetSettingByKey("PosWindowY");
+
             posWindowX.SValue = QString::number(pos.x());
             posWindowY.SValue = QString::number(pos.y());
             m_dbmanager->UpdateSetting(posWindowX);
@@ -463,6 +475,24 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
             return true;
         }
     }
+
+    // ===== ОБРАБОТКА ПРАВОГО КЛИКА НА КНОПКАХ ФИЛЬТРА =====
+    if (event->type() == QEvent::MouseButtonPress) {
+        QMouseEvent *mouseEvent = dynamic_cast<QMouseEvent*>(event);
+
+        if (mouseEvent && mouseEvent->button() == Qt::RightButton) {
+            QAbstractButton *btn = qobject_cast<QAbstractButton*>(obj);
+
+            if (btn && m_filterGroup) {
+                if (m_filterGroup->buttons().contains(btn)) {
+                    int btnId = m_filterGroup->id(btn);
+                    ShowProjectContextMenu(btnId, mouseEvent->globalPos());
+                    return true;
+                }
+            }
+        }
+    }
+
     // Для всех остальных событий вызываем стандартную обработку
     return QMainWindow::eventFilter(obj, event);
 }
@@ -507,6 +537,21 @@ void MainWindow::ShowDatePickerPopup()
     QPoint pos = btnCalendar->mapToGlobal(QPoint(0, btnCalendar->height()));
     popup->move(pos);
     popup->exec();
+}
+
+void MainWindow::ShowProjectContextMenu(int btnId, const QPoint &pos)
+{
+    QMenu contextMenu;
+
+    contextMenu.addAction("Удалить", [this, btnId]() {
+        // Удаление проекта
+        int projectId = (btnId == 0) ? -1 : m_projects[btnId - 1].id;
+
+        m_dbmanager->DeleteProjectFromDB(projectId);
+        UpdateAllList();
+    });
+
+    contextMenu.exec(pos);
 }
 
 QList<taskItem*> MainWindow::collectVisibleTaskItems() const
