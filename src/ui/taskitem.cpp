@@ -27,7 +27,7 @@ taskItem::taskItem(task t, dbmanager *dbm, QWidget *parent) : QWidget(parent)
 
     m_checkBox = new QCheckBox(this);
     m_checkBox->setChecked(m_Task.is_completed);
-    connect(m_checkBox, &QCheckBox::checkStateChanged, this, [this](bool value){
+    connect(m_checkBox, &QCheckBox::toggled, this, [this](bool value){
         m_db->CompleteTask(value, m_Task);
 
         if(value)
@@ -42,6 +42,8 @@ taskItem::taskItem(task t, dbmanager *dbm, QWidget *parent) : QWidget(parent)
     textLayout->setSpacing(4); // Расстояние между заголовком и тегом
 
     m_titleLabel = new QLabel(m_Task.title, this);
+    m_titleLabel->setWordWrap(true);
+    m_titleLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     if(m_Task.is_completed)
         m_titleLabel->setStyleSheet("color: grey; font-size: 16px; font-weight: 500; text-decoration: line-through;");
     else
@@ -55,16 +57,22 @@ taskItem::taskItem(task t, dbmanager *dbm, QWidget *parent) : QWidget(parent)
 
     QLabel *tagLabel = new QLabel(m_Task.tags, this);
     tagLabel->setObjectName("tagLabel"); // Даем имя для стилизации в QSS
+    if (m_Task.tags.trimmed().isEmpty()) {
+        tagLabel->setVisible(false);
+    }
 
     QString deadlineText = m_Task.getDeadlineText();
     m_deadlineLabel = new QLabel(this);
     m_deadlineLabel->setText(deadlineText);
     m_deadlineLabel->setObjectName("deadlineLabel");
     m_deadlineLabel->installEventFilter(this);
-    // connect(m_deadlineLabel, &ClickableLabel::clicked, this, &taskItem::ShowDatePickerForEditDeadline);
+    if (deadlineText.trimmed().isEmpty()) {
+        m_deadlineLabel->setVisible(false);
+    }
 
     textHLayout->addWidget(tagLabel);
     textHLayout->addWidget(m_deadlineLabel);
+    textHLayout->addStretch();
 
     textLayout->addWidget(m_titleLabel);
     textLayout->addLayout(textHLayout);
@@ -73,12 +81,10 @@ taskItem::taskItem(task t, dbmanager *dbm, QWidget *parent) : QWidget(parent)
     m_deleteBtn = new QPushButton("×", this);
     m_deleteBtn->setFixedSize(24, 24);
     connect(m_deleteBtn, &QPushButton::clicked, this, &taskItem::onDeleteBtnClick);
-    // Стили кнопок лучше оставить в QSS файле, но для примера оставим тут
 
-    mainLayout->addWidget(m_checkBox);
-    mainLayout->addLayout(textLayout); // Добавляем наш текстовый блок
-    mainLayout->addStretch();
-    mainLayout->addWidget(m_deleteBtn);
+    mainLayout->addWidget(m_checkBox, 0, Qt::AlignTop | Qt::AlignLeft);
+    mainLayout->addLayout(textLayout, 1);
+    mainLayout->addWidget(m_deleteBtn, 0, Qt::AlignTop | Qt::AlignRight);
 }
 
 bool taskItem::eventFilter(QObject *obj, QEvent *event)

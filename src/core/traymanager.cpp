@@ -19,7 +19,11 @@ void traymanager::createTrayIcon(MainWindow *mainWindow) {
     QAction *quitAction = new QAction("Выход", trayMenu);
 
     // 3. Соединяем сигналы. Используем mainWindow (указатель)
-    QAction::connect(restoreAction, &QAction::triggered, mainWindow, &MainWindow::showNormal);
+    QAction::connect(restoreAction, &QAction::triggered, mainWindow, [mainWindow]() {
+        mainWindow->show();
+        mainWindow->raise();
+        mainWindow->activateWindow();
+    });
     QAction::connect(quitAction, &QAction::triggered, qApp, &QCoreApplication::quit);
 
     trayMenu->addAction(restoreAction);
@@ -30,11 +34,12 @@ void traymanager::createTrayIcon(MainWindow *mainWindow) {
 
     // 4. Логика клика. Захватываем mainWindow в лямбду [mainWindow]
     QAction::connect(trayIcon, &QSystemTrayIcon::activated, [mainWindow](QSystemTrayIcon::ActivationReason reason) {
-        if (reason == QSystemTrayIcon::Trigger) {
-            if (mainWindow->isVisible()) {
+        if (reason == QSystemTrayIcon::Trigger || reason == QSystemTrayIcon::DoubleClick) {
+            if (mainWindow->isVisible() && !mainWindow->isMinimized()) {
                 mainWindow->hide();
             } else {
-                mainWindow->showNormal();
+                mainWindow->show();
+                mainWindow->raise();
                 mainWindow->activateWindow();
             }
         }

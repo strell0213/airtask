@@ -253,7 +253,7 @@ void MainWindow::initSettings()
     QCheckBox *startUpCheck = new QCheckBox(opacityWidget);
     startUpCheck->setText("Запускать программу при запуске системы");
     startUpCheck->setChecked((startUp.SValue == "1") ? true : false);
-    connect(startUpCheck, &QCheckBox::checkStateChanged, this, [this](bool value){
+    connect(startUpCheck, &QCheckBox::toggled, this, [this](bool value){
         m_settingManager->SetAutostart(value);
 
         setting startUp = GetSettingByKey("StartUp");
@@ -278,10 +278,11 @@ void MainWindow::initSettings()
     QCheckBox *notifyCheck = new QCheckBox(notifyWidget);
     notifyCheck->setText("Показывать уведомления по дедлайнам");
     notifyCheck->setChecked((sNotify.SValue == "1") ? true : false);
-    connect(notifyCheck, &QCheckBox::checkStateChanged, this, [this](bool value){
+    connect(notifyCheck, &QCheckBox::toggled, this, [this](bool value){
         setting sNotify = GetSettingByKey("Notify");
         sNotify.SValue = (value) ? "1" : "0";
         m_dbmanager->UpdateSetting(sNotify);
+        m_notify = value;
     });
 
     notifyLayout->addWidget(notifyLabel);
@@ -313,14 +314,24 @@ void MainWindow::UpdateSettings()
     setting posWindowY = GetSettingByKey("PosWindowY");
     int x = posWindowX.SValue.toInt();
     int y = posWindowY.SValue.toInt();
-    if (x == 0 && y == 0) {
+
+    QScreen *screen = QGuiApplication::primaryScreen();
+    QRect screenGeometry = screen ? screen->availableGeometry() : QRect(0, 0, 800, 600);
+
+    if (x <= 0 && y <= 0) {
         // Центр экрана по умолчанию
-        QScreen *screen = QGuiApplication::primaryScreen();
-        QRect screenGeometry = screen->geometry();
-        x = (screenGeometry.width() - width()) / 2;
-        y = (screenGeometry.height() - height()) / 2;
+        x = screenGeometry.x() + (screenGeometry.width() - width()) / 2;
+        y = screenGeometry.y() + (screenGeometry.height() - height()) / 2;
+    } else {
+        // Проверяем, чтобы окно не оказалось за пределами видимого экрана
+        if (x < screenGeometry.left() || x > screenGeometry.right() - 50) {
+            x = screenGeometry.x() + (screenGeometry.width() - width()) / 2;
+        }
+        if (y < screenGeometry.top() || y > screenGeometry.bottom() - 50) {
+            y = screenGeometry.y() + (screenGeometry.height() - height()) / 2;
+        }
     }
-    move(posWindowX.SValue.toInt(), posWindowY.SValue.toInt());
+    move(x, y);
 
     setting sNotify = GetSettingByKey("Notify");
     m_notify = (sNotify.SValue == "1") ? true : false;
@@ -328,24 +339,40 @@ void MainWindow::UpdateSettings()
 
 void MainWindow::onAddTaskButtonOnClick()
 {
-    if(inputContainer->isVisible())
-      inputContainer->setVisible(false);
-    else
-      inputContainer->setVisible(true);
+    if(inputContainer->isVisible()) {
+        inputContainer->setVisible(false);
+    } else {
+        loadProjectsAddComboBox();
+        taskInput->clear();
+        labelInput->clear();
+        deadlineInput->setDateTime(QDateTime::currentDateTime());
+        inputContainer->setVisible(true);
+        taskInput->setFocus();
+    }
 }
 
 void MainWindow::onAddTaskButtonToDBOnClick()
 {
-    int projectId = m_dbmanager->GetFindProjectOrCreateID(categoryCombo->currentText().trimmed());
+    QString catText = categoryCombo->currentText().trimmed();
+    int projectId = -1;
+    if (!catText.isEmpty()) {
+        projectId = m_dbmanager->GetFindProjectOrCreateID(catText);
+    }
 
     task addtask;
-    addtask.title = taskInput->text();
+    addtask.title = taskInput->text().trimmed();
     addtask.project_id = projectId;
-    addtask.tags = labelInput->text();
+    addtask.tags = labelInput->text().trimmed();
     addtask.deadline = deadlineInput->dateTime();
 
-    m_dbmanager->AddTaskToDB(addtask);
+    if (!addtask.title.isEmpty()) {
+        m_dbmanager->AddTaskToDB(addtask);
+    }
 
+    taskInput->clear();
+    labelInput->clear();
+    categoryCombo->setCurrentIndex(-1);
+    categoryCombo->setEditText("");
     inputContainer->setVisible(false);
     UpdateAllList();
 }
@@ -354,6 +381,7 @@ void MainWindow::UpdateAllList()
 {
     UpdateProjectTabs();
     UpdateListTask();
+    loadProjectsAddComboBox();
 }
 
 void MainWindow::UpdateProjectTabs()
@@ -427,13 +455,26 @@ void MainWindow::UpdateListTask(bool updateDb)
 
 void MainWindow::loadProjectsAddComboBox()
 {
+    QString prevText = categoryCombo->currentText().trimmed();
+    categoryCombo->clear();
+
     QVector<QString> names = m_dbmanager->GetListNameProjects();
-
-    if(names.empty()) return;
-
-    for (QString n : names)
+    for (const QString &n : names)
     {
-        categoryCombo->addItem(n);
+        if (!n.trimmed().isEmpty())
+            categoryCombo->addItem(n.trimmed());
+    }
+
+    if (!prevText.isEmpty()) {
+        int idx = categoryCombo->findText(prevText, Qt::MatchFixedString);
+        if (idx >= 0) {
+            categoryCombo->setCurrentIndex(idx);
+        } else {
+            categoryCombo->setEditText(prevText);
+        }
+    } else {
+        categoryCombo->setCurrentIndex(-1);
+        categoryCombo->setEditText("");
     }
 }
 
@@ -449,14 +490,14 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
             QMouseEvent *mouseEvent = dynamic_cast<QMouseEvent*>(event);
             if (mouseEvent && mouseEvent->button() == Qt::LeftButton) {
                 m_dragging = true;
-                m_dragPos = mouseEvent->globalPos() - frameGeometry().topLeft();
+                m_dragPos = mouseEvent->globalPosition().toPoint() - frameGeometry().topLeft();
                 return true;
             }
         }
         else if (event->type() == QEvent::MouseMove && m_dragging) {
             QMouseEvent *mouseEvent = dynamic_cast<QMouseEvent*>(event);
             if (mouseEvent) {
-                move(mouseEvent->globalPos() - m_dragPos);
+                move(mouseEvent->globalPosition().toPoint() - m_dragPos);
                 return true;
             }
         }
@@ -486,7 +527,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
             if (btn && m_filterGroup) {
                 if (m_filterGroup->buttons().contains(btn)) {
                     int btnId = m_filterGroup->id(btn);
-                    ShowProjectContextMenu(btnId, mouseEvent->globalPos());
+                    ShowProjectContextMenu(btnId, mouseEvent->globalPosition().toPoint());
                     return true;
                 }
             }

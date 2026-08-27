@@ -1,5 +1,7 @@
 #include "dbmanager.h"
-#include "QFileInfo"
+#include <QFileInfo>
+#include <QCoreApplication>
+#include <QDir>
 
 dbmanager::dbmanager(QString nameDB)
 {
@@ -11,7 +13,11 @@ void dbmanager::connectDatabase()
 {
     m_db = QSqlDatabase::addDatabase("QSQLITE");
 
-    m_db.setDatabaseName(m_nameDB);
+    QString dbPath = m_nameDB;
+    if (QFileInfo(dbPath).isRelative()) {
+        dbPath = QDir(QCoreApplication::applicationDirPath()).filePath(m_nameDB);
+    }
+    m_db.setDatabaseName(dbPath);
 
     if (!m_db.open()) {
         qDebug() << "Ошибка подключения: " << m_db.lastError().text();
@@ -70,16 +76,17 @@ QVector<QString> dbmanager::GetListNameProjects()
     QVector<QString> names;
 
     QSqlQuery query;
-    if (!query.exec("SELECT * FROM projects")) {
+    if (!query.exec("SELECT DISTINCT name FROM projects WHERE name IS NOT NULL AND TRIM(name) != '' ORDER BY id ASC")) {
         qDebug() << "Ошибка запроса:" << query.lastError().text();
         return {};
     }
 
     while(query.next())
     {
-        QString name = query.value("name").toString();
-
-        names.push_back(name);
+        QString name = query.value("name").toString().trimmed();
+        if (!name.isEmpty()) {
+            names.push_back(name);
+        }
     }
 
     return names;
@@ -335,10 +342,13 @@ void dbmanager::UpdateProjects(QVector<projects> &m_projects)
 
 int dbmanager::GetFindProjectOrCreateID(QString name)
 {
-    int findId = GetFindProject(name);
+    QString trimmedName = name.trimmed();
+    if (trimmedName.isEmpty()) return -1;
+
+    int findId = GetFindProject(trimmedName);
     if(findId >= 0) return findId;
 
-    int createId = CreateProjectByName(name);
+    int createId = CreateProjectByName(trimmedName);
     if(createId >= 0) return createId;
 
     return -1;
@@ -346,10 +356,12 @@ int dbmanager::GetFindProjectOrCreateID(QString name)
 
 int dbmanager::GetFindProject(QString name)
 {
-    QSqlQuery query;
+    QString trimmedName = name.trimmed();
+    if (trimmedName.isEmpty()) return -1;
 
-    query.prepare("SELECT id FROM projects WHERE name = :name");
-    query.bindValue(":name", name);
+    QSqlQuery query;
+    query.prepare("SELECT id FROM projects WHERE TRIM(name) = :name COLLATE NOCASE LIMIT 1");
+    query.bindValue(":name", trimmedName);
     if (!query.exec()) {
         qDebug() << "Ошибка запроса:" << query.lastError().text();
         return -1;
@@ -363,10 +375,12 @@ int dbmanager::GetFindProject(QString name)
 
 int dbmanager::CreateProjectByName(QString name)
 {
-    QSqlQuery query;
+    QString trimmedName = name.trimmed();
+    if (trimmedName.isEmpty()) return -1;
 
+    QSqlQuery query;
     query.prepare("INSERT INTO projects (name) VALUES (:name)");
-    query.bindValue(":name", name);
+    query.bindValue(":name", trimmedName);
 
     if (!query.exec()) {
         qDebug() << "INSERT Error:" << query.lastError().text();
@@ -442,7 +456,7 @@ void dbmanager::CheckSettings(QVector<setting> &settings)
         AddSetting("PosWindowX", "0");
     }
 
-    if(!posWindowX)
+    if(!posWindowY)
     {
         update=true;
         AddSetting("PosWindowY", "0");
