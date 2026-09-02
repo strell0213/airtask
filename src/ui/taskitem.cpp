@@ -28,6 +28,7 @@ taskItem::taskItem(task t, dbmanager *dbm, QWidget *parent) : QWidget(parent)
     m_checkBox = new QCheckBox(this);
     m_checkBox->setChecked(m_Task.is_completed);
     connect(m_checkBox, &QCheckBox::toggled, this, [this](bool value){
+        m_Task.is_completed = value;
         m_db->CompleteTask(value, m_Task);
 
         if(value)
@@ -35,6 +36,7 @@ taskItem::taskItem(task t, dbmanager *dbm, QWidget *parent) : QWidget(parent)
         else
             m_titleLabel->setStyleSheet("color: white; font-size: 16px; font-weight: 500;");
 
+        emit updateRequested();
     });
 
     // --- СОЗДАЕМ ВЕРТИКАЛЬНЫЙ БЛОК ДЛЯ ТЕКСТА ---
@@ -43,7 +45,8 @@ taskItem::taskItem(task t, dbmanager *dbm, QWidget *parent) : QWidget(parent)
 
     m_titleLabel = new QLabel(m_Task.title, this);
     m_titleLabel->setWordWrap(true);
-    m_titleLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    m_titleLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    m_titleLabel->setMinimumWidth(0);
     if(m_Task.is_completed)
         m_titleLabel->setStyleSheet("color: grey; font-size: 16px; font-weight: 500; text-decoration: line-through;");
     else
@@ -98,6 +101,11 @@ bool taskItem::eventFilter(QObject *obj, QEvent *event)
         return true;
     }
     return QWidget::eventFilter(obj, event);
+}
+
+QSize taskItem::minimumSizeHint() const
+{
+    return QSize(50, 30);
 }
 
 void taskItem::paintEvent(QPaintEvent * /*event*/)

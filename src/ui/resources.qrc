@@ -3,5 +3,6 @@
         <file>style.qss</file>
         <file>icon.ico</file>
         <file>settigns.svg</file>
+        <file>telegram.svg</file>
     </qresource>
 </RCC>

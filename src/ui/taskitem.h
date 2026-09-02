@@ -22,6 +22,8 @@ public:
     int taskId() const { return m_Task.id; }
     int projectId() const { return m_Task.project_id; }
 
+    QSize minimumSizeHint() const override;
+
 protected:
     void paintEvent(QPaintEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;

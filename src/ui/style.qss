@@ -32,19 +32,24 @@ QPushButton#addButton:hover {
     background-color: #3d434f;
 }
 
-QPushButton#settingsButton {
+QPushButton#settingsButton,
+QPushButton#telegramButton {
     background-color: #2d323b;
     color: #ffffff;
     border: 1px solid #3d434f;
     border-radius: 6px;
 }
 
-QPushButton#settingsButton:hover {
+QPushButton#settingsButton:hover,
+QPushButton#telegramButton:hover {
     background-color: #3d434f;
 }
 
-QWidget#settingsScreen{
+QWidget#settingsScreen,
+QWidget#settingsContent,
+QScrollArea#settingsScrollArea {
     background-color: #2d2d2d;
+    border: none;
 }
 
 /* Хедер категории (Work, Personal) */
@@ -145,3 +150,25 @@ taskItem:hover {
     padding: 2px 6px;            /* Отступы внутри рамки (2px верх/низ, 6px лево/право) */
     font-size: 12px;             /* Теги обычно меньше заголовка */
 }
+
+#dbPathEdit {
+    background-color: #252a33;
+    border: 1px solid #3d434f;
+    border-radius: 6px;
+    padding: 6px 8px;
+    color: #cccccc;
+    font-size: 12px;
+}
+
+#btnSelectDbDir {
+    background-color: #2d323b;
+    border: 1px solid #3d434f;
+    border-radius: 6px;
+    padding: 6px 12px;
+    color: #ffffff;
+    font-size: 12px;
+}
+
+#btnSelectDbDir:hover {
+    background-color: #3d434f;
+}

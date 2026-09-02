@@ -12,7 +12,15 @@
 #include <QTimeEdit>
 #include <QCalendarWidget>
 #include <QButtonGroup>
+#include <QFileDialog>
+#include <QMessageBox>
+#include <QResizeEvent>
 #include <algorithm>
+
+#if defined(Q_OS_WIN)
+#include <windows.h>
+#include <windowsx.h>
+#endif
 
 static bool taskItemYLessThan(taskItem* a, taskItem* b)
 {
@@ -27,32 +35,57 @@ MainWindow::MainWindow(QWidget *parent)
     ui->setupUi(this);
     setWindowIcon(QIcon(":/icon.ico"));
 
+    m_settingManager = new settingsmanager();
+
+    QString dbDir = m_settingManager->GetDatabaseDir();
+    QString dbPath = QDir(dbDir).filePath("airtask.db");
+    m_dbmanager = new dbmanager(dbPath);
+
     initMainWindow();
     initAddLayout();
 
     loadStyle();
 
-    m_dbmanager = new dbmanager("airtask.db");
     UpdateAllList();
 
     m_traymanager = new traymanager();
     m_traymanager->createTrayIcon(this);
 
-    m_settingManager = new settingsmanager();
-
     settingsScreen = new QWidget();
     settingsScreen->setObjectName("settingsScreen");
-    UpdateSettings();
+    QVBoxLayout *screenLayout = new QVBoxLayout(settingsScreen);
+    screenLayout->setContentsMargins(0, 0, 0, 0);
+
+    settingsScrollArea = new QScrollArea(settingsScreen);
+    settingsScrollArea->setWidgetResizable(true);
+    settingsScrollArea->setFrameShape(QFrame::NoFrame);
+    settingsScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    settingsScrollArea->setObjectName("settingsScrollArea");
+
+    settingsContent = new QWidget();
+    settingsContent->setObjectName("settingsContent");
+    settingsScrollArea->setWidget(settingsContent);
+
+    screenLayout->addWidget(settingsScrollArea);
+
     initSettings();
+    UpdateSettings();
     stackedWidget->addWidget(settingsScreen);
 
     m_notifyTimer = new QTimer(this);
     connect(m_notifyTimer, &QTimer::timeout, this, &MainWindow::CheckDeadlines);
     m_notifyTimer->start(10000); // каждые 10 секунд
+
+
+    m_updateTimer = new QTimer(this);
+    connect(m_updateTimer, &QTimer::timeout, this, &MainWindow::UpdateAllTimer);
+    m_updateTimer->start(10000);
 }
 
 MainWindow::~MainWindow()
 {
+    delete m_settingManager;
+    delete m_dbmanager;
     delete ui;
 }
 
@@ -76,6 +109,12 @@ void MainWindow::initMainWindow()
 {
     setWindowFlags(Qt::FramelessWindowHint | Qt::Tool | Qt::WindowStaysOnTopHint);
     setAttribute(Qt::WA_TranslucentBackground); // Прозрачный фон для закругленных углов
+    setMinimumSize(300, 300);
+    setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
+
+    int savedW = m_settingManager->GetWindowWidth();
+    int savedH = m_settingManager->GetWindowHeight();
+    resize(savedW, savedH);
 
     QWidget *centralWidget = new QWidget(this);
     centralWidget->setObjectName("centralWidget"); // Для QSS
@@ -103,6 +142,11 @@ void MainWindow::initMainWindow()
     settingsButton->setIcon(QIcon(":/settigns.svg"));
     settingsButton->setFixedSize(30, 30); // Квадратная кнопка
 
+    QPushButton *telegramButton = new QPushButton(this);
+    telegramButton->setObjectName("telegramButton");
+    telegramButton->setIcon(QIcon(":/telegram.svg"));
+    telegramButton->setFixedSize(30, 30); // Квадратная кнопка
+
     connect(addButton, &QPushButton::clicked, this, &MainWindow::onAddTaskButtonOnClick);
     connect(settingsButton, &QPushButton::clicked, this, [this](){
         if(stackedWidget->currentIndex() == 0) {
@@ -114,12 +158,14 @@ void MainWindow::initMainWindow()
 
     headerLayout->addWidget(titleLabel);
     headerLayout->addStretch(); // Сдвигает кнопку вправо
+    headerLayout->addWidget(telegramButton);
     headerLayout->addWidget(settingsButton);
     headerLayout->addWidget(addButton);
 
     mainLayout->addWidget(headerWidget);
 
     QWidget *tabsWidget = new QWidget(this);
+    tabsWidget->setMinimumWidth(0);
     tabsLayout = new QHBoxLayout(tabsWidget);
     tabsLayout->setContentsMargins(5, 0, 5, 8);
     tabsLayout->setSpacing(6);
@@ -146,8 +192,10 @@ void MainWindow::initMainWindow()
     taskListScreen->setFrameShape(QFrame::NoFrame); // Убираем рамку скролла
     taskListScreen->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff); // Убираем горизонтальный скролл
     taskListScreen->setObjectName("taskScrollArea");
+    taskListScreen->setMinimumSize(0, 0);
 
     m_scrollContent = new QWidget();
+    m_scrollContent->setMinimumWidth(0);
     scrollLayout = new QVBoxLayout(m_scrollContent); // Сохраняем лейаут, чтобы добавлять задачи
     scrollLayout->setSpacing(10);
     scrollLayout->setContentsMargins(10, 10, 10, 10);
@@ -171,11 +219,13 @@ void MainWindow::initAddLayout()
     taskInput = new QLineEdit(this);
     taskInput->setPlaceholderText("Add a new task...");
     taskInput->setObjectName("taskInput");
+    taskInput->setMinimumWidth(0);
 
     // Поле для метки/лейбла
     labelInput = new QLineEdit(this);
     labelInput->setPlaceholderText("Label");
     labelInput->setObjectName("labelInput");
+    labelInput->setMinimumWidth(0);
 
     deadlineInput = new QDateTimeEdit(this);
     deadlineInput->setObjectName("deadlineInput");
@@ -183,6 +233,7 @@ void MainWindow::initAddLayout()
     deadlineInput->setButtonSymbols(QAbstractSpinBox::NoButtons);
     deadlineInput->setDisplayFormat("dd-MMM-yy HH:mm");
     deadlineInput->setDate(QDate::currentDate());
+    deadlineInput->setMinimumWidth(0);
 
     btnCalendar = new QPushButton("📅", this);
     btnCalendar->setFixedWidth(30);
@@ -196,6 +247,7 @@ void MainWindow::initAddLayout()
     // Выбор категории (Work/Personal)
     categoryCombo = new QComboBox(this);
     categoryCombo->setEditable(true);
+    categoryCombo->setMinimumWidth(0);
     loadProjectsAddComboBox();
 
     QPushButton *addbutton = new QPushButton("Add",this);
@@ -216,84 +268,243 @@ void MainWindow::initAddLayout()
 
 void MainWindow::initSettings()
 {
-    QVBoxLayout *layout = new QVBoxLayout(settingsScreen);
-    layout->setContentsMargins(10,10,10,30);
+    QVBoxLayout *layout = new QVBoxLayout(settingsContent);
+    layout->setContentsMargins(10, 10, 10, 30);
+    layout->setSpacing(12);
 
-    QLabel *label = new QLabel("Настройки программы", settingsScreen);
-    label->setStyleSheet("color: white; font-size: 18px;");
+    QLabel *label = new QLabel("Настройки программы", settingsContent);
+    label->setStyleSheet("color: white; font-size: 18px; font-weight: bold;");
 
-    //прозрачность
-    setting opacityS = GetSettingByKey("OpacityApp");
-    setting startUp = GetSettingByKey("StartUp");
+    // 1. База данных
+    QWidget *dbWidget = new QWidget(settingsContent);
+    QVBoxLayout *dbLayout = new QVBoxLayout(dbWidget);
+    dbLayout->setContentsMargins(0, 5, 0, 5);
 
-    QWidget *opacityWidget = new QWidget(settingsScreen);
+    QLabel *dbLabel = new QLabel("Путь к базе данных", dbWidget);
+    dbLabel->setStyleSheet("color: white; font-size: 14px; font-weight: 500;");
+
+    QHBoxLayout *dbPathLayout = new QHBoxLayout();
+    dbPathLayout->setSpacing(6);
+
+    QLineEdit *dbPathEdit = new QLineEdit(dbWidget);
+    dbPathEdit->setObjectName("dbPathEdit");
+    dbPathEdit->setReadOnly(true);
+    dbPathEdit->setText(m_settingManager->GetDatabaseDir());
+    dbPathEdit->setToolTip(m_settingManager->GetDatabaseDir());
+
+    QPushButton *btnSelectDbDir = new QPushButton("Обзор...", dbWidget);
+    btnSelectDbDir->setObjectName("btnSelectDbDir");
+    btnSelectDbDir->setCursor(Qt::PointingHandCursor);
+
+    connect(btnSelectDbDir, &QPushButton::clicked, this, [this, dbPathEdit]() {
+        QString currentDir = m_settingManager->GetDatabaseDir();
+        QString selectedDir = QFileDialog::getExistingDirectory(
+            this,
+            "Выберите папку для базы данных",
+            currentDir,
+            QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
+
+        if (!selectedDir.isEmpty()) {
+            selectedDir = QDir::toNativeSeparators(selectedDir);
+            QString currentNormalized = QDir::toNativeSeparators(currentDir);
+            if (QString::compare(selectedDir, currentNormalized, Qt::CaseInsensitive) != 0) {
+                if (m_dbmanager->ChangeDatabasePath(selectedDir)) {
+                    m_settingManager->SetDatabaseDir(selectedDir);
+                    dbPathEdit->setText(selectedDir);
+                    dbPathEdit->setToolTip(selectedDir);
+
+                    UpdateAllList();
+                    UpdateProjectTabs();
+                    loadProjectsAddComboBox();
+                    UpdateSettings();
+                } else {
+                    QMessageBox::warning(this, "Ошибка", "Не удалось переместить базу данных в выбранную папку.");
+                }
+            }
+        }
+    });
+
+    dbPathLayout->addWidget(dbPathEdit);
+    dbPathLayout->addWidget(btnSelectDbDir);
+    dbLayout->addWidget(dbLabel);
+    dbLayout->addLayout(dbPathLayout);
+
+    // 2. Прозрачность и автозапуск
+    int currentOpacity = m_settingManager->GetOpacityApp();
+    bool currentStartUp = m_settingManager->GetStartUp();
+
+    QWidget *opacityWidget = new QWidget(settingsContent);
     QVBoxLayout *opacityLayout = new QVBoxLayout(opacityWidget);
-    opacityLayout->setContentsMargins(0,5,0,10);
+    opacityLayout->setContentsMargins(0, 5, 0, 5);
 
     QLabel *opacityLabel = new QLabel("Прозрачность", opacityWidget);
-    opacityLabel->setStyleSheet("color: white; font-size: 14px");
+    opacityLabel->setStyleSheet("color: white; font-size: 14px; font-weight: 500;");
 
     QSlider *slider = new QSlider(Qt::Horizontal, opacityWidget);
     slider->setMinimum(20);
     slider->setMaximum(100);
-    slider->setValue(opacityS.SValue.toInt());
-    setWindowOpacity(opacityS.SValue.toInt() / 100.0);
+    slider->setValue(currentOpacity);
+    setWindowOpacity(currentOpacity / 100.0);
 
     connect(slider, &QSlider::valueChanged, this, [this](int value){
         setWindowOpacity(value / 100.0);
     });
 
     connect(slider, &QSlider::sliderReleased, this, [this, slider](){
-        setting opacityS = GetSettingByKey("OpacityApp");
         setWindowOpacity(slider->value() / 100.0);
-        opacityS.SValue = QString::number(slider->value());
-        m_dbmanager->UpdateSetting(opacityS);
+        m_settingManager->SetOpacityApp(slider->value());
     });
 
     QCheckBox *startUpCheck = new QCheckBox(opacityWidget);
     startUpCheck->setText("Запускать программу при запуске системы");
-    startUpCheck->setChecked((startUp.SValue == "1") ? true : false);
+    startUpCheck->setChecked(currentStartUp);
     connect(startUpCheck, &QCheckBox::toggled, this, [this](bool value){
-        m_settingManager->SetAutostart(value);
-
-        setting startUp = GetSettingByKey("StartUp");
-        startUp.SValue =(value) ? "1" : "0";
-        m_dbmanager->UpdateSetting(startUp);
+        m_settingManager->SetStartUp(value);
     });
 
     opacityLayout->addWidget(opacityLabel);
     opacityLayout->addWidget(slider);
     opacityLayout->addWidget(startUpCheck);
-    //прозрачность
 
-    //уведомления
-    setting sNotify = GetSettingByKey("Notify");
-    QWidget *notifyWidget = new QWidget(settingsScreen);
+    // 3. Уведомления
+    bool currentNotify = m_settingManager->GetNotify();
+    QWidget *notifyWidget = new QWidget(settingsContent);
     QVBoxLayout *notifyLayout = new QVBoxLayout(notifyWidget);
-    notifyLayout->setContentsMargins(0,0,0,10);
+    notifyLayout->setContentsMargins(0, 0, 0, 5);
 
     QLabel *notifyLabel = new QLabel("Уведомления", notifyWidget);
-    notifyLabel->setStyleSheet("color: white; font-size: 14px");
+    notifyLabel->setStyleSheet("color: white; font-size: 14px; font-weight: 500;");
 
     QCheckBox *notifyCheck = new QCheckBox(notifyWidget);
     notifyCheck->setText("Показывать уведомления по дедлайнам");
-    notifyCheck->setChecked((sNotify.SValue == "1") ? true : false);
+    notifyCheck->setChecked(currentNotify);
     connect(notifyCheck, &QCheckBox::toggled, this, [this](bool value){
-        setting sNotify = GetSettingByKey("Notify");
-        sNotify.SValue = (value) ? "1" : "0";
-        m_dbmanager->UpdateSetting(sNotify);
+        m_settingManager->SetNotify(value);
         m_notify = value;
     });
 
     notifyLayout->addWidget(notifyLabel);
     notifyLayout->addWidget(notifyCheck);
-    //уведомления
 
+    // 4. Задачи (скрытие выполненных)
+    bool hideCompleted = m_settingManager->GetHideCompletedTasks();
+    QWidget *tasksSettingsWidget = new QWidget(settingsContent);
+    QVBoxLayout *tasksSettingsLayout = new QVBoxLayout(tasksSettingsWidget);
+    tasksSettingsLayout->setContentsMargins(0, 0, 0, 5);
+
+    QLabel *tasksSettingsLabel = new QLabel("Задачи", tasksSettingsWidget);
+    tasksSettingsLabel->setStyleSheet("color: white; font-size: 14px; font-weight: 500;");
+
+    QCheckBox *hideCompletedCheck = new QCheckBox(tasksSettingsWidget);
+    hideCompletedCheck->setText("Скрывать выполненные задачи");
+    hideCompletedCheck->setChecked(hideCompleted);
+    connect(hideCompletedCheck, &QCheckBox::toggled, this, [this](bool value){
+        m_settingManager->SetHideCompletedTasks(value);
+        UpdateListTask();
+    });
+
+    tasksSettingsLayout->addWidget(tasksSettingsLabel);
+    tasksSettingsLayout->addWidget(hideCompletedCheck);
+
+    // 5. Скрытие категорий (панель вкладок)
+    QWidget *catTabsWidget = new QWidget(settingsContent);
+    QVBoxLayout *catTabsMainLayout = new QVBoxLayout(catTabsWidget);
+    catTabsMainLayout->setContentsMargins(0, 0, 0, 5);
+
+    QLabel *catTabsLabel = new QLabel("Отображение категорий (вкладки)", catTabsWidget);
+    catTabsLabel->setStyleSheet("color: white; font-size: 14px; font-weight: 500;");
+
+    QLabel *catTabsHint = new QLabel("Снимите галочку, чтобы скрыть вкладку категории:", catTabsWidget);
+    catTabsHint->setStyleSheet("color: #aaaaaa; font-size: 12px;");
+
+    QWidget *catTabsContainer = new QWidget(catTabsWidget);
+    m_categoryTabsLayout = new QVBoxLayout(catTabsContainer);
+    m_categoryTabsLayout->setContentsMargins(5, 2, 0, 2);
+    m_categoryTabsLayout->setSpacing(4);
+
+    catTabsMainLayout->addWidget(catTabsLabel);
+    catTabsMainLayout->addWidget(catTabsHint);
+    catTabsMainLayout->addWidget(catTabsContainer);
+
+    // 6. Скрытие категорий из вкладки "Все"
+    QWidget *catAllWidget = new QWidget(settingsContent);
+    QVBoxLayout *catAllMainLayout = new QVBoxLayout(catAllWidget);
+    catAllMainLayout->setContentsMargins(0, 0, 0, 5);
+
+    QLabel *catAllLabel = new QLabel("Отображение в категории «Все»", catAllWidget);
+    catAllLabel->setStyleSheet("color: white; font-size: 14px; font-weight: 500;");
+
+    QLabel *catAllHint = new QLabel("Снимите галочку, чтобы скрыть задачи категории из «Все»:", catAllWidget);
+    catAllHint->setStyleSheet("color: #aaaaaa; font-size: 12px;");
+
+    QWidget *catAllContainer = new QWidget(catAllWidget);
+    m_categoryAllLayout = new QVBoxLayout(catAllContainer);
+    m_categoryAllLayout->setContentsMargins(5, 2, 0, 2);
+    m_categoryAllLayout->setSpacing(4);
+
+    catAllMainLayout->addWidget(catAllLabel);
+    catAllMainLayout->addWidget(catAllHint);
+    catAllMainLayout->addWidget(catAllContainer);
 
     layout->addWidget(label);
+    layout->addWidget(dbWidget);
     layout->addWidget(opacityWidget);
     layout->addWidget(notifyWidget);
+    layout->addWidget(tasksSettingsWidget);
+    layout->addWidget(catTabsWidget);
+    layout->addWidget(catAllWidget);
     layout->addStretch();
+}
+
+void MainWindow::UpdateCategorySettings()
+{
+    if (!m_categoryTabsLayout || !m_categoryAllLayout) return;
+
+    // Очистить текущие чекбоксы
+    QLayoutItem *item;
+    while ((item = m_categoryTabsLayout->takeAt(0)) != nullptr) {
+        if (item->widget()) delete item->widget();
+        delete item;
+    }
+    while ((item = m_categoryAllLayout->takeAt(0)) != nullptr) {
+        if (item->widget()) delete item->widget();
+        delete item;
+    }
+
+    QSet<int> hiddenTabs = m_settingManager->GetHiddenCategoryIds();
+    QSet<int> hiddenAll = m_settingManager->GetHiddenFromAllCategoryIds();
+
+    if (m_projects.isEmpty()) {
+        QLabel *emptyTabs = new QLabel("Нет созданных категорий", settingsContent);
+        emptyTabs->setStyleSheet("color: #888888; font-size: 12px;");
+        m_categoryTabsLayout->addWidget(emptyTabs);
+
+        QLabel *emptyAll = new QLabel("Нет созданных категорий", settingsContent);
+        emptyAll->setStyleSheet("color: #888888; font-size: 12px;");
+        m_categoryAllLayout->addWidget(emptyAll);
+        return;
+    }
+
+    for (const projects &p : m_projects) {
+        // Чекбокс для показа вкладки
+        QCheckBox *cbTab = new QCheckBox(p.name, settingsContent);
+        cbTab->setChecked(!hiddenTabs.contains(p.id));
+        connect(cbTab, &QCheckBox::toggled, this, [this, projectId = p.id](bool checked) {
+            m_settingManager->SetCategoryHidden(projectId, !checked);
+            UpdateProjectTabs();
+            UpdateListTask();
+        });
+        m_categoryTabsLayout->addWidget(cbTab);
+
+        // Чекбокс для отображения в "Все"
+        QCheckBox *cbAll = new QCheckBox(p.name, settingsContent);
+        cbAll->setChecked(!hiddenAll.contains(p.id));
+        connect(cbAll, &QCheckBox::toggled, this, [this, projectId = p.id](bool checked) {
+            m_settingManager->SetCategoryHiddenFromAll(projectId, !checked);
+            UpdateListTask();
+        });
+        m_categoryAllLayout->addWidget(cbAll);
+    }
 }
 
 void MainWindow::loadStyle()
@@ -310,31 +521,28 @@ void MainWindow::UpdateSettings()
 {
     m_dbmanager->UpdateSettings(m_settings);
 
-    setting posWindowX = GetSettingByKey("PosWindowX");
-    setting posWindowY = GetSettingByKey("PosWindowY");
-    int x = posWindowX.SValue.toInt();
-    int y = posWindowY.SValue.toInt();
+    int x = m_settingManager->GetPosWindowX();
+    int y = m_settingManager->GetPosWindowY();
+    int w = m_settingManager->GetWindowWidth();
+    int h = m_settingManager->GetWindowHeight();
 
     QScreen *screen = QGuiApplication::primaryScreen();
     QRect screenGeometry = screen ? screen->availableGeometry() : QRect(0, 0, 800, 600);
 
     if (x <= 0 && y <= 0) {
         // Центр экрана по умолчанию
-        x = screenGeometry.x() + (screenGeometry.width() - width()) / 2;
-        y = screenGeometry.y() + (screenGeometry.height() - height()) / 2;
-    } else {
-        // Проверяем, чтобы окно не оказалось за пределами видимого экрана
-        if (x < screenGeometry.left() || x > screenGeometry.right() - 50) {
-            x = screenGeometry.x() + (screenGeometry.width() - width()) / 2;
-        }
-        if (y < screenGeometry.top() || y > screenGeometry.bottom() - 50) {
-            y = screenGeometry.y() + (screenGeometry.height() - height()) / 2;
-        }
+        x = screenGeometry.x() + (screenGeometry.width() - w) / 2;
+        y = screenGeometry.y() + (screenGeometry.height() - h) / 2;
     }
     move(x, y);
+    resize(w, h);
 
-    setting sNotify = GetSettingByKey("Notify");
-    m_notify = (sNotify.SValue == "1") ? true : false;
+    int opacity = m_settingManager->GetOpacityApp();
+    setWindowOpacity(opacity / 100.0);
+
+    m_notify = m_settingManager->GetNotify();
+
+    UpdateCategorySettings();
 }
 
 void MainWindow::onAddTaskButtonOnClick()
@@ -382,6 +590,7 @@ void MainWindow::UpdateAllList()
     UpdateProjectTabs();
     UpdateListTask();
     loadProjectsAddComboBox();
+    UpdateCategorySettings();
 }
 
 void MainWindow::UpdateProjectTabs()
@@ -397,19 +606,34 @@ void MainWindow::UpdateProjectTabs()
     // Кнопка "Все" — btnIndex = 0
     QPushButton *btnAll = new QPushButton("Все", this);
     btnAll->setCheckable(true);
-    btnAll->setChecked(true);
     btnAll->setObjectName("projectTab");
     m_filterGroup->addButton(btnAll, 0);
     tabsLayout->addWidget(btnAll);
 
     m_dbmanager->UpdateProjects(m_projects);
 
+    QSet<int> hiddenTabs = m_settingManager->GetHiddenCategoryIds();
+    bool currentSelectedVisible = (m_currentProjectId == -1);
+
     for (int i = 0; i < m_projects.size(); i++) {
+        if (hiddenTabs.contains(m_projects[i].id))
+            continue;
+
         QPushButton *btn = new QPushButton(m_projects[i].name, this);
         btn->setCheckable(true);
         btn->setObjectName("projectTab");
         m_filterGroup->addButton(btn, i + 1);
         tabsLayout->addWidget(btn);
+
+        if (m_currentProjectId == m_projects[i].id) {
+            btn->setChecked(true);
+            currentSelectedVisible = true;
+        }
+    }
+
+    if (!currentSelectedVisible || m_currentProjectId == -1) {
+        m_currentProjectId = -1;
+        btnAll->setChecked(true);
     }
 
     if (m_filterGroup) {
@@ -437,10 +661,23 @@ void MainWindow::UpdateListTask(bool updateDb)
         delete item; // Удаляем обертку (layout item)
     }
 
+    bool hideCompleted = m_settingManager->GetHideCompletedTasks();
+    QSet<int> hiddenFromAll = m_settingManager->GetHiddenFromAllCategoryIds();
+
     // 3. Создаем новые виджеты на основе данных из m_task
     for (const task &t : m_task) {
-        if (m_currentProjectId != -1 && t.project_id != m_currentProjectId)
+        if (hideCompleted && t.is_completed)
             continue;
+
+        if (m_currentProjectId == -1) {
+            // Во вкладке "Все" пропускаем задачи скрытых категорий
+            if (t.project_id != -1 && hiddenFromAll.contains(t.project_id))
+                continue;
+        } else {
+            // В конкретной вкладке отображаем только задачи этой категории
+            if (t.project_id != m_currentProjectId)
+                continue;
+        }
 
         // Создаем наш кастомный виджет
         taskItem *item = new taskItem(t, m_dbmanager, m_scrollContent);
@@ -493,6 +730,9 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                 m_dragPos = mouseEvent->globalPosition().toPoint() - frameGeometry().topLeft();
                 return true;
             }
+            if (mouseEvent && mouseEvent->button() == Qt::RightButton) {
+                ShowAirTaskContextMenu(mouseEvent->globalPosition().toPoint());
+            }
         }
         else if (event->type() == QEvent::MouseMove && m_dragging) {
             QMouseEvent *mouseEvent = dynamic_cast<QMouseEvent*>(event);
@@ -505,13 +745,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
             m_dragging = false;
             QPoint pos = frameGeometry().topLeft();
 
-            setting posWindowX = GetSettingByKey("PosWindowX");
-            setting posWindowY = GetSettingByKey("PosWindowY");
-
-            posWindowX.SValue = QString::number(pos.x());
-            posWindowY.SValue = QString::number(pos.y());
-            m_dbmanager->UpdateSetting(posWindowX);
-            m_dbmanager->UpdateSetting(posWindowY);
+            m_settingManager->SetWindowPos(pos.x(), pos.y());
 
             return true;
         }
@@ -590,6 +824,21 @@ void MainWindow::ShowProjectContextMenu(int btnId, const QPoint &pos)
 
         m_dbmanager->DeleteProjectFromDB(projectId);
         UpdateAllList();
+    });
+
+    contextMenu.exec(pos);
+}
+
+void MainWindow::ShowAirTaskContextMenu(const QPoint &pos)
+{
+    QMenu contextMenu;
+
+    contextMenu.addAction("Свернуть", [this]() {
+        this->hide();
+    });
+
+    contextMenu.addAction("Выход", [this]() {
+        QCoreApplication::quit();
     });
 
     contextMenu.exec(pos);
@@ -678,4 +927,48 @@ void MainWindow::CheckDeadlines()
     }
     UpdateListTask(false);
 }
+
+void MainWindow::UpdateAllTimer()
+{
+    UpdateAllList();
+}
+
+void MainWindow::resizeEvent(QResizeEvent *event)
+{
+    QMainWindow::resizeEvent(event);
+    if (m_settingManager && !isMinimized() && !isMaximized()) {
+        m_settingManager->SetWindowSize(width(), height());
+    }
+}
+
+#if defined(Q_OS_WIN)
+bool MainWindow::nativeEvent(const QByteArray &eventType, void *message, qintptr *result)
+{
+    if (eventType == "windows_generic_MSG") {
+        MSG *msg = static_cast<MSG*>(message);
+        if (msg->message == WM_NCHITTEST) {
+            const int borderMargin = 8;
+            POINT pt = { GET_X_LPARAM(msg->lParam), GET_Y_LPARAM(msg->lParam) };
+            RECT rc;
+            GetWindowRect(reinterpret_cast<HWND>(winId()), &rc);
+
+            bool left = (pt.x >= rc.left && pt.x < rc.left + borderMargin);
+            bool right = (pt.x < rc.right && pt.x >= rc.right - borderMargin);
+            bool top = (pt.y >= rc.top && pt.y < rc.top + borderMargin);
+            bool bottom = (pt.y < rc.bottom && pt.y >= rc.bottom - borderMargin);
+
+            if (top && left) { *result = HTTOPLEFT; return true; }
+            if (top && right) { *result = HTTOPRIGHT; return true; }
+            if (bottom && left) { *result = HTBOTTOMLEFT; return true; }
+            if (bottom && right) { *result = HTBOTTOMRIGHT; return true; }
+            if (left) { *result = HTLEFT; return true; }
+            if (right) { *result = HTRIGHT; return true; }
+            if (top) { *result = HTTOP; return true; }
+            if (bottom) { *result = HTBOTTOM; return true; }
+        }
+    }
+    return QMainWindow::nativeEvent(eventType, message, result);
+}
+#endif
+
 

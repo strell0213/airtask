@@ -9,14 +9,29 @@ dbmanager::dbmanager(QString nameDB)
     connectDatabase();
 }
 
+dbmanager::~dbmanager()
+{
+    if (m_db.isOpen()) {
+        m_db.close();
+    }
+}
+
 void dbmanager::connectDatabase()
 {
-    m_db = QSqlDatabase::addDatabase("QSQLITE");
-
     QString dbPath = m_nameDB;
     if (QFileInfo(dbPath).isRelative()) {
         dbPath = QDir(QCoreApplication::applicationDirPath()).filePath(m_nameDB);
     }
+
+    QFileInfo fi(dbPath);
+    QDir().mkpath(fi.absolutePath());
+
+    if (QSqlDatabase::contains(QSqlDatabase::defaultConnection)) {
+        m_db = QSqlDatabase::database(QSqlDatabase::defaultConnection);
+    } else {
+        m_db = QSqlDatabase::addDatabase("QSQLITE");
+    }
+
     m_db.setDatabaseName(dbPath);
 
     if (!m_db.open()) {
@@ -25,8 +40,67 @@ void dbmanager::connectDatabase()
     }
 
     qDebug() << "Путь к БД:" << QFileInfo(m_db.databaseName()).absoluteFilePath();
-
     qDebug() << "База данных успешно подключена!";
+}
+
+QString dbmanager::GetDatabaseFilePath() const
+{
+    QString path = m_nameDB;
+    if (QFileInfo(path).isRelative()) {
+        path = QDir(QCoreApplication::applicationDirPath()).filePath(m_nameDB);
+    }
+    return QFileInfo(path).absoluteFilePath();
+}
+
+QString dbmanager::GetDatabaseDirPath() const
+{
+    return QFileInfo(GetDatabaseFilePath()).absolutePath();
+}
+
+bool dbmanager::ChangeDatabasePath(const QString &newDir)
+{
+    QDir targetDir(newDir);
+    if (!targetDir.exists()) {
+        if (!targetDir.mkpath(".")) {
+            qDebug() << "Не удалось создать целевую папку:" << newDir;
+            return false;
+        }
+    }
+
+    QString currentFilePath = GetDatabaseFilePath();
+    QString targetFilePath = QFileInfo(targetDir.filePath("airtask.db")).absoluteFilePath();
+
+    if (QFileInfo(currentFilePath).absoluteFilePath() == targetFilePath) {
+        return true;
+    }
+
+    // Close current connection
+    if (m_db.isOpen()) {
+        m_db.close();
+    }
+    m_db = QSqlDatabase();
+    QSqlDatabase::removeDatabase(QSqlDatabase::defaultConnection);
+
+    // If the new folder already has airtask.db, connect to it directly without transferring
+    if (QFile::exists(targetFilePath)) {
+        qDebug() << "В выбранной папке уже существует база данных, подключаемся к ней:" << targetFilePath;
+    } else if (QFile::exists(currentFilePath)) {
+        // Otherwise transfer existing database file to the new destination
+        if (QFile::copy(currentFilePath, targetFilePath)) {
+            QFile::remove(currentFilePath);
+            qDebug() << "База данных успешно перемещена в:" << targetFilePath;
+        } else {
+            qDebug() << "Ошибка копирования базы данных в:" << targetFilePath;
+            // Rollback
+            m_nameDB = currentFilePath;
+            connectDatabase();
+            return false;
+        }
+    }
+
+    m_nameDB = targetFilePath;
+    connectDatabase();
+    return m_db.isOpen();
 }
 
 void dbmanager::UpdateTasks(QVector<task> &tasks, int orderProjectId)
@@ -427,55 +501,9 @@ void dbmanager::UpdateSettings(QVector<setting> &settings)
 
 void dbmanager::CheckSettings(QVector<setting> &settings)
 {
-    bool update = false;
-
-    bool opacity = false;
-    bool posWindowX = false;
-    bool posWindowY = false;
-    bool notify = false;
-    bool startUp = false;
-
-    for (const setting s : settings)
-    {
-        if(s.SKey == "OpacityApp") opacity = true;
-        if(s.SKey == "PosWindowX") posWindowX = true;
-        if(s.SKey == "PosWindowY") posWindowY = true;
-        if(s.SKey == "Notify") notify = true;
-        if(s.SKey == "StartUp") startUp = true;
-    }
-
-    if(!opacity)
-    {
-        update=true;
-        AddSetting("OpacityApp", "100");
-    }
-
-    if(!posWindowX)
-    {
-        update=true;
-        AddSetting("PosWindowX", "0");
-    }
-
-    if(!posWindowY)
-    {
-        update=true;
-        AddSetting("PosWindowY", "0");
-    }
-
-    if(!notify)
-    {
-        update=true;
-        AddSetting("Notify", "1");
-    }
-
-    if (!startUp)
-    {
-        update=true;
-        AddSetting("StartUp", "0");
-    }
-
-    if (update) UpdateSettings(settings);
-    else return;
+    Q_UNUSED(settings);
+    // Локальные настройки (OpacityApp, PosWindowX, PosWindowY, Notify, StartUp)
+    // теперь хранятся в Settings.ini через settingsmanager.
 }
 
 void dbmanager::AddSetting(QString name, QString value)

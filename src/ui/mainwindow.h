@@ -38,12 +38,17 @@ public:
     void UpdateProjectTabs();
     void UpdateAllList();
     void UpdateSettings();
+    void UpdateCategorySettings();
     void ReorderTasks(QList<taskItem*> items, int projectId);
 private slots:
     void onTaskOrderChanged();
 protected:
     void closeEvent(QCloseEvent *event) override;
     bool eventFilter(QObject *obj, QEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
+#if defined(Q_OS_WIN)
+    bool nativeEvent(const QByteArray &eventType, void *message, qintptr *result) override;
+#endif
 private:
     Ui::MainWindow *ui;
     QVBoxLayout *scrollLayout;
@@ -52,6 +57,10 @@ private:
     QScrollArea *taskListScreen;
     QWidget *m_scrollContent = nullptr;
     QWidget *settingsScreen;
+    QScrollArea *settingsScrollArea = nullptr;
+    QWidget *settingsContent = nullptr;
+    QVBoxLayout *m_categoryTabsLayout = nullptr;
+    QVBoxLayout *m_categoryAllLayout = nullptr;
 
     //форма добавления
     QWidget *inputContainer;
@@ -97,7 +106,11 @@ private:
 
     void ShowDatePickerPopup();
     void ShowProjectContextMenu(int btnId, const QPoint &pos);
+    void ShowAirTaskContextMenu(const QPoint &pos);
     QList<taskItem*> collectVisibleTaskItems() const;
+
+    QTimer *m_updateTimer;
+    void UpdateAllTimer();
 
     //уведомления
     bool m_notify;

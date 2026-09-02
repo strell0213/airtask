@@ -23,6 +23,11 @@ private:
 
 public:
     dbmanager(QString nameDB);
+    ~dbmanager();
+
+    QString GetDatabaseFilePath() const;
+    QString GetDatabaseDirPath() const;
+    bool ChangeDatabasePath(const QString &newDir);
 
     void UpdateTasks(QVector<task> &m_tasks, int orderProjectId = OrderProjectAll);
     void AddTaskToDB(task newTask);
