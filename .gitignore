@@ -20,6 +20,10 @@ out/
 *.o
 *.out
 
+# --- AI
+.cursor*/
+*.md
+
 # --- Generated Source Files (Qt-specific) ---
 # Эти файлы создаются автоматически из .ui, .qrc и классов с Q_OBJECT
 ui_*.h
