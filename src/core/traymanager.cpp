@@ -53,12 +53,19 @@ bool traymanager::checkIcon() {
     return (this->trayIcon && this->trayIcon->isVisible());
 }
 
+void traymanager::ShowMessage(const QString &title, const QString &message)
+{
+    if (trayIcon && trayIcon->isVisible()) {
+        trayIcon->showMessage(
+            title,
+            message,
+            QSystemTrayIcon::Information,
+            5000
+        );
+    }
+}
+
 void traymanager::ShowMessage(QString mes)
 {
-    trayIcon->showMessage(
-        "AirTask",                                          // заголовок
-        mes, // текст
-        QSystemTrayIcon::Information,                       // иконка
-        5000                                                // показывать 5 сек
-        );
+    ShowMessage("AirTask", mes);
 }

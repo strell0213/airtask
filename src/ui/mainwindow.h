@@ -15,6 +15,8 @@
 #include "../src/core/models/setting.h"
 #include "../src/core/dbmanager.h"
 #include "../src/core/traymanager.h"
+#include "../src/core/inotifier.h"
+#include "../src/core/consolenotifier.h"
 #include "../src/ui/taskitem.h"
 #include "../src/core/settingsmanager.h"
 #include <QStackedWidget>
@@ -72,8 +74,11 @@ private:
     QHBoxLayout *tabsLayout;
     QButtonGroup *m_filterGroup;
 
-    //трей
+    //трей и уведомления (полиморфизм)
     traymanager *m_traymanager;
+    QVector<INotifier*> m_notifiers; // Список полиморфных уведомителей (INotifier*)
+
+    void SendMesToNotifiers();
 
     //перемещение окна
     bool m_dragging = false;

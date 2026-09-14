@@ -51,6 +51,10 @@ MainWindow::MainWindow(QWidget *parent)
     m_traymanager = new traymanager();
     m_traymanager->createTrayIcon(this);
 
+    // Пример полиморфизма: регистрируем разные уведомители в общий список базового типа INotifier*
+    m_notifiers.append(m_traymanager);
+    m_notifiers.append(new ConsoleNotifier());
+
     settingsScreen = new QWidget();
     settingsScreen->setObjectName("settingsScreen");
     QVBoxLayout *screenLayout = new QVBoxLayout(settingsScreen);
@@ -84,6 +88,8 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow()
 {
+    qDeleteAll(m_notifiers);
+    m_notifiers.clear();
     delete m_settingManager;
     delete m_dbmanager;
     delete ui;
@@ -919,7 +925,7 @@ void MainWindow::CheckDeadlines()
                 else
                     mes = QString("«%1» через %2 мин").arg(t.title).arg(minute);
 
-                m_traymanager->ShowMessage(mes);
+                SendMesToNotifiers();
 
                 m_notifiedTasks[t.id].insert(minute);
             }
@@ -938,6 +944,15 @@ void MainWindow::resizeEvent(QResizeEvent *event)
     QMainWindow::resizeEvent(event);
     if (m_settingManager && !isMinimized() && !isMaximized()) {
         m_settingManager->SetWindowSize(width(), height());
+    }
+}
+
+// Полиморфный вызов: MainWindow не знает, куда именно уйдут уведомления (в трей, в консоль, в телеграм).
+// Он просто обращается к интерфейсу INotifier, а C++ сам вызывает нужный метод класса-наследника!
+void MainWindow::SendMesToNotifiers()
+{
+    for (INotifier *notifier : m_notifiers) {
+        notifier->ShowMessage("AirTask", mes);
     }
 }
 
