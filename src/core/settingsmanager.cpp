@@ -60,6 +60,14 @@ void settingsmanager::CheckSettings()
         settings.setValue("Categories/HiddenFromAll", QStringList());
         changed = true;
     }
+    if (!settings.contains("Telegram/Token")) {
+        settings.setValue("Telegram/Token", "");
+        changed = true;
+    }
+    if (!settings.contains("Telegram/AutoStart")) {
+        settings.setValue("Telegram/AutoStart", false);
+        changed = true;
+    }
 
     if (changed) {
         settings.sync();
@@ -386,6 +394,36 @@ void settingsmanager::SetHiddenFromAllCategoryIds(const QSet<int> &ids)
 bool settingsmanager::IsCategoryHiddenFromAll(int categoryId)
 {
     return GetHiddenFromAllCategoryIds().contains(categoryId);
+}
+
+QString settingsmanager::GetTelegramToken()
+{
+    EnsureSettingsFileExists();
+    QSettings settings(GetSettingsFilePath(), QSettings::IniFormat);
+    return settings.value("Telegram/Token", "").toString().trimmed();
+}
+
+void settingsmanager::SetTelegramToken(const QString &token)
+{
+    EnsureSettingsFileExists();
+    QSettings settings(GetSettingsFilePath(), QSettings::IniFormat);
+    settings.setValue("Telegram/Token", token.trimmed());
+    settings.sync();
+}
+
+bool settingsmanager::GetTelegramAutoStart()
+{
+    EnsureSettingsFileExists();
+    QSettings settings(GetSettingsFilePath(), QSettings::IniFormat);
+    return settings.value("Telegram/AutoStart", false).toBool();
+}
+
+void settingsmanager::SetTelegramAutoStart(bool enable)
+{
+    EnsureSettingsFileExists();
+    QSettings settings(GetSettingsFilePath(), QSettings::IniFormat);
+    settings.setValue("Telegram/AutoStart", enable);
+    settings.sync();
 }
 
 

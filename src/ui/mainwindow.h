@@ -17,6 +17,8 @@
 #include "../src/core/traymanager.h"
 #include "../src/core/inotifier.h"
 #include "../src/core/consolenotifier.h"
+#include "../src/core/telegrambot.h"
+#include "../src/ui/telegramdialog.h"
 #include "../src/ui/taskitem.h"
 #include "../src/core/settingsmanager.h"
 #include <QStackedWidget>
@@ -76,9 +78,12 @@ private:
 
     //трей и уведомления (полиморфизм)
     traymanager *m_traymanager;
+    TelegramBot *m_telegramBot = nullptr;
+    TelegramDialog *m_telegramDialog = nullptr;
     QVector<INotifier*> m_notifiers; // Список полиморфных уведомителей (INotifier*)
 
-    void SendMesToNotifiers();
+    void SendMesToNotifiers(const QString &mes);
+    void onTelegramButtonOnClick();
 
     //перемещение окна
     bool m_dragging = false;

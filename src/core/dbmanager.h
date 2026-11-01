@@ -53,6 +53,22 @@ public:
     void CheckSettings(QVector<setting> &settings);
     void AddSetting(QString name, QString value);
     void UpdateSetting(setting s);
+
+    // Telegram Bot Users
+    struct TelegramUserInfo {
+        int id = 0;
+        qint64 chatId = 0;
+        QString username;
+        QString firstName;
+        QString authDate;
+    };
+
+    QVector<qint64> GetTelegramSubscribers();
+    QVector<TelegramUserInfo> GetTelegramUsers();
+    bool AddTelegramUser(qint64 chatId, const QString &username, const QString &firstName);
+    bool RemoveTelegramUser(qint64 chatId);
+    bool IsTelegramUserAuthorized(qint64 chatId);
 };
 
 #endif // DBMANAGER_H
+

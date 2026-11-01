@@ -56,6 +56,12 @@ public:
     void SetCategoryHiddenFromAll(int categoryId, bool hidden);
     void SetHiddenFromAllCategoryIds(const QSet<int> &ids);
     bool IsCategoryHiddenFromAll(int categoryId);
+
+    QString GetTelegramToken();
+    void SetTelegramToken(const QString &token);
+
+    bool GetTelegramAutoStart();
+    void SetTelegramAutoStart(bool enable);
 };
 
 #endif // SETTINGSMANAGER_H

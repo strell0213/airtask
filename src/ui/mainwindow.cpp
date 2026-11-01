@@ -55,6 +55,15 @@ MainWindow::MainWindow(QWidget *parent)
     m_notifiers.append(m_traymanager);
     m_notifiers.append(new ConsoleNotifier());
 
+    m_telegramBot = new TelegramBot(m_dbmanager, m_settingManager, this);
+    m_notifiers.append(m_telegramBot);
+    connect(m_telegramBot, &TelegramBot::taskAdded, this, &MainWindow::UpdateAllList);
+
+    // Автозапуск бота, если включена соответствующая настройка
+    if (m_settingManager->GetTelegramAutoStart() && !m_settingManager->GetTelegramToken().isEmpty()) {
+        m_telegramBot->StartBot();
+    }
+
     settingsScreen = new QWidget();
     settingsScreen->setObjectName("settingsScreen");
     QVBoxLayout *screenLayout = new QVBoxLayout(settingsScreen);
@@ -154,6 +163,7 @@ void MainWindow::initMainWindow()
     telegramButton->setFixedSize(30, 30); // Квадратная кнопка
 
     connect(addButton, &QPushButton::clicked, this, &MainWindow::onAddTaskButtonOnClick);
+    connect(telegramButton, &QPushButton::clicked, this, &MainWindow::onTelegramButtonOnClick);
     connect(settingsButton, &QPushButton::clicked, this, [this](){
         if(stackedWidget->currentIndex() == 0) {
             stackedWidget->setCurrentIndex(1); // Показать настройки
@@ -925,7 +935,7 @@ void MainWindow::CheckDeadlines()
                 else
                     mes = QString("«%1» через %2 мин").arg(t.title).arg(minute);
 
-                SendMesToNotifiers();
+                SendMesToNotifiers(mes);
 
                 m_notifiedTasks[t.id].insert(minute);
             }
@@ -949,11 +959,21 @@ void MainWindow::resizeEvent(QResizeEvent *event)
 
 // Полиморфный вызов: MainWindow не знает, куда именно уйдут уведомления (в трей, в консоль, в телеграм).
 // Он просто обращается к интерфейсу INotifier, а C++ сам вызывает нужный метод класса-наследника!
-void MainWindow::SendMesToNotifiers()
+void MainWindow::SendMesToNotifiers(const QString &mes)
 {
     for (INotifier *notifier : m_notifiers) {
         notifier->ShowMessage("AirTask", mes);
     }
+}
+
+void MainWindow::onTelegramButtonOnClick()
+{
+    if (!m_telegramDialog) {
+        m_telegramDialog = new TelegramDialog(m_telegramBot, m_settingManager, m_dbmanager, this);
+    }
+    m_telegramDialog->show();
+    m_telegramDialog->raise();
+    m_telegramDialog->activateWindow();
 }
 
 #if defined(Q_OS_WIN)

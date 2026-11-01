@@ -39,6 +39,17 @@ void dbmanager::connectDatabase()
         return;
     }
 
+    QSqlQuery initQuery(m_db);
+    initQuery.exec(
+        "CREATE TABLE IF NOT EXISTS telegram_users ("
+        "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "  chat_id INTEGER UNIQUE NOT NULL,"
+        "  username TEXT,"
+        "  first_name TEXT,"
+        "  auth_date DATETIME DEFAULT CURRENT_TIMESTAMP"
+        ");"
+    );
+
     qDebug() << "Путь к БД:" << QFileInfo(m_db.databaseName()).absoluteFilePath();
     qDebug() << "База данных успешно подключена!";
 }
@@ -536,4 +547,81 @@ void dbmanager::UpdateSetting(setting s)
     } else {
         return;
     }
+}
+
+QVector<qint64> dbmanager::GetTelegramSubscribers()
+{
+    QVector<qint64> list;
+    QSqlQuery query(m_db);
+    query.prepare("SELECT chat_id FROM telegram_users");
+    if (query.exec()) {
+        while (query.next()) {
+            list.append(query.value("chat_id").toLongLong());
+        }
+    } else {
+        qDebug() << "GetTelegramSubscribers Error:" << query.lastError().text();
+    }
+    return list;
+}
+
+QVector<dbmanager::TelegramUserInfo> dbmanager::GetTelegramUsers()
+{
+    QVector<TelegramUserInfo> list;
+    QSqlQuery query(m_db);
+    query.prepare("SELECT id, chat_id, username, first_name, auth_date FROM telegram_users ORDER BY id DESC");
+    if (query.exec()) {
+        while (query.next()) {
+            TelegramUserInfo user;
+            user.id = query.value("id").toInt();
+            user.chatId = query.value("chat_id").toLongLong();
+            user.username = query.value("username").toString();
+            user.firstName = query.value("first_name").toString();
+            user.authDate = query.value("auth_date").toString();
+            list.append(user);
+        }
+    } else {
+        qDebug() << "GetTelegramUsers Error:" << query.lastError().text();
+    }
+    return list;
+}
+
+bool dbmanager::AddTelegramUser(qint64 chatId, const QString &username, const QString &firstName)
+{
+    QSqlQuery query(m_db);
+    query.prepare("INSERT OR REPLACE INTO telegram_users (chat_id, username, first_name, auth_date) "
+                  "VALUES (:chat_id, :username, :first_name, datetime('now', 'localtime'))");
+    query.bindValue(":chat_id", chatId);
+    query.bindValue(":username", username);
+    query.bindValue(":first_name", firstName);
+
+    if (!query.exec()) {
+        qDebug() << "AddTelegramUser Error:" << query.lastError().text();
+        return false;
+    }
+    return true;
+}
+
+bool dbmanager::RemoveTelegramUser(qint64 chatId)
+{
+    QSqlQuery query(m_db);
+    query.prepare("DELETE FROM telegram_users WHERE chat_id = :chat_id");
+    query.bindValue(":chat_id", chatId);
+
+    if (!query.exec()) {
+        qDebug() << "RemoveTelegramUser Error:" << query.lastError().text();
+        return false;
+    }
+    return true;
+}
+
+bool dbmanager::IsTelegramUserAuthorized(qint64 chatId)
+{
+    QSqlQuery query(m_db);
+    query.prepare("SELECT COUNT(*) FROM telegram_users WHERE chat_id = :chat_id");
+    query.bindValue(":chat_id", chatId);
+
+    if (query.exec() && query.next()) {
+        return query.value(0).toInt() > 0;
+    }
+    return false;
 }
