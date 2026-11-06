@@ -58,6 +58,9 @@ class TelegramBot : public QObject, public INotifier
     Q_OBJECT
 
 public:
+    static constexpr int MAX_RECONNECT_ATTEMPTS = 5;
+    static constexpr int RECONNECT_DELAY_SEC = 3;
+
     explicit TelegramBot(dbmanager *dbMgr, settingsmanager *settingsMgr, QObject *parent = nullptr);
     ~TelegramBot() override;
 
@@ -97,6 +100,7 @@ private slots:
 private:
     void pollUpdates();
     void scheduleRetry(int delayMs);
+    void restartApplication();
     void fetchBotInfo();
     void processUpdate(const QJsonObject &updateObj);
     void processMessage(const QJsonObject &msgObj);

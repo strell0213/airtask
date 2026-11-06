@@ -4,6 +4,8 @@
 #include <QUrlQuery>
 #include <QNetworkRequest>
 #include <QDebug>
+#include <QProcess>
+#include <QCoreApplication>
 
 TelegramBot::TelegramBot(dbmanager *dbMgr, settingsmanager *settingsMgr, QObject *parent)
     : QObject(parent)
@@ -140,6 +142,7 @@ void TelegramBot::StopBot()
 {
     bool wasRunning = m_isRunning;
     m_isRunning = false;
+    m_consecutiveErrors = 0;
     m_taskCreationSessions.clear();
 
     if (m_pollRetryTimer->isActive()) {
@@ -248,36 +251,59 @@ void TelegramBot::onPollFinished()
     if (reply->error() != QNetworkReply::NoError) {
         // Ошибка сети или соединения
         int httpCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-        m_consecutiveErrors++;
 
         if (httpCode == 401) {
             setState(BotState::Reconnecting, "Неверный токен бота (401). Переподключение...");
             log("Ошибка long polling: Неверный токен бота (401).");
-        } else {
-            int delaySec = qMin(15, 2 * (1 << qMin(m_consecutiveErrors - 1, 3))); // 2, 4, 8, 15 сек
-            setState(BotState::Reconnecting, QString("Ошибка связи. Переподключение через %1 с...").arg(delaySec));
-            log(QString("Ошибка связи long polling: %1 (HTTP %2). Переподключение через %3 с...").arg(reply->errorString()).arg(httpCode).arg(delaySec));
-            scheduleRetry(delaySec * 1000);
+            scheduleRetry(5000);
             return;
         }
 
-        scheduleRetry(5000);
+        m_consecutiveErrors++;
+
+        if (m_consecutiveErrors > MAX_RECONNECT_ATTEMPTS) {
+            log(QString("Не удалось восстановить связь с Telegram после %1 попыток. Перезапуск программы...").arg(MAX_RECONNECT_ATTEMPTS));
+            setState(BotState::Reconnecting, "Перезапуск программы...");
+            restartApplication();
+            return;
+        }
+
+        int delaySec = RECONNECT_DELAY_SEC;
+        setState(BotState::Reconnecting, QString("Ошибка связи. Переподключение (%1/%2) через %3 с...")
+                 .arg(m_consecutiveErrors).arg(MAX_RECONNECT_ATTEMPTS).arg(delaySec));
+        log(QString("Ошибка связи long polling: %1 (HTTP %2). Переподключение (%3/%4) через %5 с...")
+            .arg(reply->errorString()).arg(httpCode).arg(m_consecutiveErrors).arg(MAX_RECONNECT_ATTEMPTS).arg(delaySec));
+        scheduleRetry(delaySec * 1000);
         return;
     }
 
-    // Успешный ответ
-    m_consecutiveErrors = 0;
     QByteArray data = reply->readAll();
     QJsonDocument doc = QJsonDocument::fromJson(data);
     QJsonObject root = doc.object();
 
     if (!root.value("ok").toBool()) {
         QString desc = root.value("description").toString();
-        setState(BotState::Reconnecting, QString("Ошибка Telegram: %1. Переподключение...").arg(desc));
-        log(QString("Ошибка Telegram API: %1. Переподключение...").arg(desc));
-        scheduleRetry(4000);
+        m_consecutiveErrors++;
+
+        if (m_consecutiveErrors > MAX_RECONNECT_ATTEMPTS) {
+            log(QString("Не удалось восстановить связь с Telegram после %1 попыток (ошибка API: %2). Перезапуск программы...")
+                .arg(MAX_RECONNECT_ATTEMPTS).arg(desc));
+            setState(BotState::Reconnecting, "Перезапуск программы...");
+            restartApplication();
+            return;
+        }
+
+        int delaySec = RECONNECT_DELAY_SEC;
+        setState(BotState::Reconnecting, QString("Ошибка Telegram: %1. Переподключение (%2/%3) через %4 с...")
+                 .arg(desc).arg(m_consecutiveErrors).arg(MAX_RECONNECT_ATTEMPTS).arg(delaySec));
+        log(QString("Ошибка Telegram API: %1. Переподключение (%2/%3) через %4 с...")
+            .arg(desc).arg(m_consecutiveErrors).arg(MAX_RECONNECT_ATTEMPTS).arg(delaySec));
+        scheduleRetry(delaySec * 1000);
         return;
     }
+
+    // Успешный ответ
+    m_consecutiveErrors = 0;
 
     if (m_state != BotState::Running) {
         setState(BotState::Running, "Включен (работает)");
@@ -300,13 +326,26 @@ void TelegramBot::onPollTimeout()
     // Watchdog сработал: запрос подвис
     if (m_currentPollReply) {
         log("Сработал watchdog: таймаут соединения long polling. Перезапуск сетевого запроса...");
-        m_currentPollReply->abort();
-        m_currentPollReply->deleteLater();
+        QNetworkReply *reply = m_currentPollReply;
         m_currentPollReply = nullptr;
+        reply->abort();
+        reply->deleteLater();
     }
 
-    setState(BotState::Reconnecting, "Таймаут соединения. Перезапуск...");
-    scheduleRetry(1000);
+    m_consecutiveErrors++;
+
+    if (m_consecutiveErrors > MAX_RECONNECT_ATTEMPTS) {
+        log(QString("Не удалось восстановить связь с Telegram после %1 попыток (таймаут). Перезапуск программы...")
+            .arg(MAX_RECONNECT_ATTEMPTS));
+        setState(BotState::Reconnecting, "Перезапуск программы...");
+        restartApplication();
+        return;
+    }
+
+    int delaySec = RECONNECT_DELAY_SEC;
+    setState(BotState::Reconnecting, QString("Таймаут соединения. Переподключение (%1/%2) через %3 с...")
+             .arg(m_consecutiveErrors).arg(MAX_RECONNECT_ATTEMPTS).arg(delaySec));
+    scheduleRetry(delaySec * 1000);
 }
 
 
@@ -314,6 +353,26 @@ void TelegramBot::scheduleRetry(int delayMs)
 {
     if (!m_isRunning) return;
     m_pollRetryTimer->start(delayMs);
+}
+
+void TelegramBot::restartApplication()
+{
+    log("Выполняется перезапуск программы...");
+    StopBot();
+
+    QString appPath = QCoreApplication::applicationFilePath();
+    QStringList args = QCoreApplication::arguments();
+    if (!args.isEmpty()) {
+        args.removeFirst();
+    }
+
+    bool started = QProcess::startDetached(appPath, args, QCoreApplication::applicationDirPath());
+    if (!started) {
+        log("Критическая ошибка: не удалось запустить новый процесс приложения при перезапуске.");
+        return;
+    }
+
+    QCoreApplication::quit();
 }
 
 void TelegramBot::processUpdate(const QJsonObject &updateObj)
