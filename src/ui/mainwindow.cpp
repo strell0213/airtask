@@ -591,6 +591,9 @@ void MainWindow::onAddTaskButtonToDBOnClick()
 
     if (!addtask.title.isEmpty()) {
         m_dbmanager->AddTaskToDB(addtask);
+        if (m_telegramBot) {
+            m_telegramBot->NotifyTaskCreated(addtask, catText.isEmpty() ? "Без категории" : catText);
+        }
     }
 
     taskInput->clear();
@@ -617,7 +620,10 @@ void MainWindow::UpdateProjectTabs()
         if (item->widget()) delete item->widget();
         delete item;
     }
-    m_filterGroup->buttons().clear();
+    const auto oldButtons = m_filterGroup->buttons();
+    for (QAbstractButton *btn : oldButtons) {
+        m_filterGroup->removeButton(btn);
+    }
 
     // Кнопка "Все" — btnIndex = 0
     QPushButton *btnAll = new QPushButton("Все", this);

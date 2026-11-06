@@ -156,6 +156,36 @@ void dbmanager::UpdateTasks(QVector<task> &tasks, int orderProjectId)
     }
 }
 
+bool dbmanager::GetTaskById(int id, task &outTask)
+{
+    QSqlQuery query(m_db);
+    query.prepare("SELECT id, project_id, title, is_completed, deadline, tags FROM tasks WHERE id = :id LIMIT 1");
+    query.bindValue(":id", id);
+    if (query.exec() && query.next()) {
+        outTask.id = query.value("id").toInt();
+        outTask.project_id = query.value("project_id").toInt();
+        outTask.title = query.value("title").toString();
+        outTask.is_completed = query.value("is_completed").toBool();
+        outTask.deadline = query.value("deadline").toDateTime();
+        outTask.tags = query.value("tags").toString();
+        return true;
+    }
+    return false;
+}
+
+QString dbmanager::GetProjectNameById(int projectId)
+{
+    if (projectId <= 0) return "Без категории";
+    QSqlQuery query(m_db);
+    query.prepare("SELECT name FROM projects WHERE id = :id LIMIT 1");
+    query.bindValue(":id", projectId);
+    if (query.exec() && query.next()) {
+        QString name = query.value("name").toString().trimmed();
+        if (!name.isEmpty()) return name;
+    }
+    return "Без категории";
+}
+
 QVector<QString> dbmanager::GetListNameProjects()
 {
     QVector<QString> names;
@@ -197,7 +227,9 @@ void dbmanager::AddTaskToDB(task newTask)
         int taskId = query.lastInsertId().toInt();
         int next = GetNextNumpp(newTask.project_id);
         AddTaskOrder(taskId, newTask.project_id, next);
-        AddTaskOrder(taskId, OrderProjectAll, GetNextNumpp(OrderProjectAll));
+        if (newTask.project_id != OrderProjectAll) {
+            AddTaskOrder(taskId, OrderProjectAll, GetNextNumpp(OrderProjectAll));
+        }
     }
 }
 

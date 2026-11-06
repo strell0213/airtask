@@ -41,6 +41,18 @@ struct TaskCreationSession {
     QVector<projects> availableProjects;
 };
 
+enum class TaskEditField {
+    None,
+    Title,
+    Tags,
+    Deadline
+};
+
+struct TaskEditSession {
+    int taskId = 0;
+    TaskEditField field = TaskEditField::None;
+};
+
 class TelegramBot : public QObject, public INotifier
 {
     Q_OBJECT
@@ -51,6 +63,7 @@ public:
 
     // Реализация полиморфного интерфейса INotifier
     void ShowMessage(const QString &title, const QString &message) override;
+    void NotifyTaskCreated(const task &newTask, const QString &categoryName);
 
     void StartBot();
     void StopBot();
@@ -96,6 +109,12 @@ private:
     void handleTaskCreationStep(qint64 chatId, const QString &text);
     void cancelTaskCreation(qint64 chatId, bool notifyUser = true);
 
+    void processCallbackQuery(const QJsonObject &cbObj);
+    void answerCallbackQuery(const QString &callbackQueryId, const QString &text = QString());
+    void showTaskDetails(qint64 chatId, int taskId, int userIndex);
+    QJsonObject getTaskInlineKeyboard(int taskId, bool isCompleted = false) const;
+    void handleTaskEditStep(qint64 chatId, const QString &text);
+
     dbmanager *m_dbManager = nullptr;
     settingsmanager *m_settingsManager = nullptr;
     QNetworkAccessManager *m_networkManager = nullptr;
@@ -119,6 +138,8 @@ private:
 
     QVector<QString> m_logHistory;
     QHash<qint64, TaskCreationSession> m_taskCreationSessions;
+    QHash<qint64, QVector<int>> m_userLastTaskList;
+    QHash<qint64, TaskEditSession> m_taskEditSessions;
 };
 
 #endif // TELEGRAMBOT_H

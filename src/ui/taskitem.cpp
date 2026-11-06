@@ -254,8 +254,10 @@ void taskItem::ShowDatePickerForEditDeadline()
 
     // Календарь
     QCalendarWidget *calendar = new QCalendarWidget(popup);
-    if (!m_Task.deadline.isNull()) {
+    if (m_Task.deadline.isValid()) {
         calendar->setSelectedDate(m_Task.deadline.date());
+    } else {
+        calendar->setSelectedDate(QDate::currentDate());
     }
     layout->addWidget(calendar);
 
@@ -263,8 +265,10 @@ void taskItem::ShowDatePickerForEditDeadline()
     QHBoxLayout *timeLayout = new QHBoxLayout();
     QLabel *timeLabel = new QLabel("Время:", popup);
     QTimeEdit *timeEdit = new QTimeEdit(popup);
-    if (!m_Task.deadline.isNull()) {
+    if (m_Task.deadline.isValid()) {
         timeEdit->setTime(m_Task.deadline.time());
+    } else {
+        timeEdit->setTime(QTime::currentTime());
     }
     timeEdit->setDisplayFormat("HH:mm");
     timeLayout->addWidget(timeLabel);

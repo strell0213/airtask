@@ -30,6 +30,8 @@ public:
     bool ChangeDatabasePath(const QString &newDir);
 
     void UpdateTasks(QVector<task> &m_tasks, int orderProjectId = OrderProjectAll);
+    bool GetTaskById(int id, task &outTask);
+    QString GetProjectNameById(int projectId);
     void AddTaskToDB(task newTask);
     void CompleteTask(bool complete, task &cTask);
     void UpdateTaskChanged(task t);

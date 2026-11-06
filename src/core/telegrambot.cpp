@@ -325,6 +325,8 @@ void TelegramBot::processUpdate(const QJsonObject &updateObj)
 
     if (updateObj.contains("message")) {
         processMessage(updateObj.value("message").toObject());
+    } else if (updateObj.contains("callback_query")) {
+        processCallbackQuery(updateObj.value("callback_query").toObject());
     }
 }
 
@@ -501,22 +503,19 @@ void TelegramBot::handleTaskCreationStep(qint64 chatId, const QString &text)
         newTask.deadline = deadline;
         newTask.is_completed = false;
 
+        QString title = session.title;
+        QString projectName = session.projectName.trimmed().isEmpty() ? "Без категории" : session.projectName;
+
         if (m_dbManager) {
             m_dbManager->AddTaskToDB(newTask);
         }
 
-        QString confirmMsg = QString("✅ Задача <b>«%1»</b> успешно создана в категории <b>«%2»</b>!").arg(session.title.toHtmlEscaped(), session.projectName.toHtmlEscaped());
-        if (!session.tags.isEmpty()) {
-            confirmMsg += QString("\n🏷️ Метки: %1").arg(session.tags.toHtmlEscaped());
-        }
-        if (deadline.isValid()) {
-            confirmMsg += QString("\n⏰ Дедлайн: %1").arg(deadline.toString("dd.MM.yyyy HH:mm"));
-        }
-
-        log(QString("Создана задача «%1» (категория: «%2») через Telegram от chat_id %3").arg(session.title, session.projectName).arg(chatId));
+        QString confirmMsg = QString("✅ Задача <b>«%1»</b> успешно создана!").arg(title.toHtmlEscaped());
+        log(QString("Создана задача «%1» (категория: «%2») через Telegram от chat_id %3").arg(title, projectName).arg(chatId));
 
         m_taskCreationSessions.remove(chatId);
         sendMessage(chatId, confirmMsg);
+        NotifyTaskCreated(newTask, projectName);
         emit taskAdded();
         break;
     }
@@ -551,13 +550,18 @@ void TelegramBot::processMessage(const QJsonObject &msgObj)
     QString upperText = trimmedText.toUpper();
     QString cleanCode = m_authCode.toUpper();
 
-    // Проверка отмены пошагового создания задачи
+    // Проверка отмены пошагового создания или редактирования задачи
     bool isCancel = (lowerText == "отмена" ||
                      trimmedText == "❌ Отмена" ||
                      lowerText == "/cancel");
     if (isCancel) {
         if (m_taskCreationSessions.contains(chatId)) {
             cancelTaskCreation(chatId, true);
+            return;
+        }
+        if (m_taskEditSessions.contains(chatId)) {
+            m_taskEditSessions.remove(chatId);
+            sendMessage(chatId, "🚫 Редактирование задачи отменено.", getMainReplyKeyboard());
             return;
         }
     }
@@ -574,6 +578,21 @@ void TelegramBot::processMessage(const QJsonObject &msgObj)
             cancelTaskCreation(chatId, false);
         } else {
             handleTaskCreationStep(chatId, trimmedText);
+            return;
+        }
+    }
+
+    // Если пользователь находится в процессе редактирования задачи
+    if (m_taskEditSessions.contains(chatId)) {
+        bool isTopCommand = (trimmedText.startsWith("/") ||
+                             trimmedText == "📋 Задачи" || lowerText == "задачи" ||
+                             trimmedText == "➕ Добавить задачу" || lowerText == "добавить задачу" ||
+                             trimmedText == "ℹ️ Статус" || lowerText == "статус" ||
+                             trimmedText == "🛑 Стоп" || lowerText == "стоп");
+        if (isTopCommand) {
+            m_taskEditSessions.remove(chatId);
+        } else {
+            handleTaskEditStep(chatId, trimmedText);
             return;
         }
     }
@@ -645,9 +664,11 @@ void TelegramBot::processMessage(const QJsonObject &msgObj)
             m_dbManager->UpdateTasks(tasks);
             QString taskList;
             int count = 0;
+            QVector<int> displayedIds;
             for (const task &t : tasks) {
                 if (!t.is_completed) {
                     count++;
+                    displayedIds.append(t.id);
                     QString dlStr = t.deadline.isValid()
                         ? QString(" <i>(дедлайн: %1)</i>").arg(t.deadline.toString("dd.MM.yyyy HH:mm"))
                         : "";
@@ -659,9 +680,12 @@ void TelegramBot::processMessage(const QJsonObject &msgObj)
             }
 
             if (count == 0) {
+                m_userLastTaskList.remove(chatId);
                 sendMessage(chatId, "👍 У вас нет невыполненных задач!");
             } else {
-                sendMessage(chatId, QString("📋 <b>Ваши невыполненные задачи (%1):</b>%2").arg(count).arg(taskList));
+                m_userLastTaskList[chatId] = displayedIds;
+                sendMessage(chatId, QString("📋 <b>Ваши невыполненные задачи (%1):</b>%2\n\n💡 <i>Напишите цифру задачи для просмотра более подробной информации о задаче.</i>")
+                                        .arg(count).arg(taskList));
             }
         }
         return;
@@ -707,6 +731,34 @@ void TelegramBot::processMessage(const QJsonObject &msgObj)
         return;
     }
 
+    // Проверка выбора номера задачи из списка
+    QString numStr = trimmedText;
+    if (numStr.startsWith("#") || numStr.startsWith("№")) {
+        numStr = numStr.mid(1).trimmed();
+    }
+    if (numStr.endsWith(".")) {
+        numStr.chop(1);
+        numStr = numStr.trimmed();
+    }
+    bool okNum = false;
+    int taskIndex = numStr.toInt(&okNum);
+    if (okNum && isAuthorized) {
+        if (m_userLastTaskList.contains(chatId)) {
+            const QVector<int> &ids = m_userLastTaskList[chatId];
+            if (taskIndex >= 1 && taskIndex <= ids.size()) {
+                int taskId = ids[taskIndex - 1];
+                showTaskDetails(chatId, taskId, taskIndex);
+                return;
+            } else {
+                sendMessage(chatId, QString("⚠️ Задачи с номером %1 нет в списке. Введите число от 1 до %2:").arg(taskIndex).arg(ids.size()));
+                return;
+            }
+        } else {
+            sendMessage(chatId, "ℹ️ Сначала откройте список задач с помощью кнопки <b>📋 Задачи</b>.");
+            return;
+        }
+    }
+
     // Если код не подошел и это не известная команда
     if (!isAuthorized) {
         sendMessage(chatId,
@@ -732,7 +784,7 @@ void TelegramBot::sendMessage(qint64 chatId, const QString &text, const QJsonObj
 
     if (!customReplyMarkup.isEmpty()) {
         payload.insert("reply_markup", customReplyMarkup);
-    } else if (m_taskCreationSessions.contains(chatId)) {
+    } else if (m_taskCreationSessions.contains(chatId) || m_taskEditSessions.contains(chatId)) {
         payload.insert("reply_markup", getCancelReplyKeyboard());
     } else if (m_dbManager && m_dbManager->IsTelegramUserAuthorized(chatId)) {
         payload.insert("reply_markup", getMainReplyKeyboard());
@@ -755,6 +807,349 @@ void TelegramBot::ShowMessage(const QString &title, const QString &message)
 
     for (qint64 chatId : subscribers) {
         sendMessage(chatId, formattedMessage);
+    }
+}
+
+void TelegramBot::NotifyTaskCreated(const task &newTask, const QString &categoryName)
+{
+    if (!m_isRunning || m_token.isEmpty() || !m_dbManager) return;
+
+    QVector<qint64> subscribers = m_dbManager->GetTelegramSubscribers();
+    if (subscribers.isEmpty()) return;
+
+    log(QString("Отправка уведомления о новой задаче: «%1» для %2 подписчик(ов)").arg(newTask.title).arg(subscribers.size()));
+
+    QString safeCategory = categoryName.trimmed().isEmpty() ? "Без категории" : categoryName;
+
+    QString text = "🆕 <b>Новая задача!</b>\n\n";
+    text += QString("📌 <b>%1</b>\n").arg(newTask.title.toHtmlEscaped());
+    text += QString("📂 Категория: <b>%1</b>\n").arg(safeCategory.toHtmlEscaped());
+    if (!newTask.tags.trimmed().isEmpty()) {
+        text += QString("🏷️ Метки: %1\n").arg(newTask.tags.toHtmlEscaped());
+    }
+    if (newTask.deadline.isValid()) {
+        text += QString("⏰ Дедлайн: %1\n").arg(newTask.deadline.toString("dd.MM.yyyy HH:mm"));
+    }
+
+    for (qint64 chatId : subscribers) {
+        sendMessage(chatId, text);
+    }
+}
+
+void TelegramBot::answerCallbackQuery(const QString &callbackQueryId, const QString &text)
+{
+    if (m_token.isEmpty() || callbackQueryId.isEmpty()) return;
+
+    QUrl url(QString("https://api.telegram.org/bot%1/answerCallbackQuery").arg(m_token));
+    QNetworkRequest request(url);
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+
+    QJsonObject payload;
+    payload.insert("callback_query_id", callbackQueryId);
+    if (!text.isEmpty()) {
+        payload.insert("text", text);
+    }
+
+    QNetworkReply *reply = m_networkManager->post(request, QJsonDocument(payload).toJson(QJsonDocument::Compact));
+    connect(reply, &QNetworkReply::finished, reply, &QNetworkReply::deleteLater);
+}
+
+QJsonObject TelegramBot::getTaskInlineKeyboard(int taskId, bool isCompleted) const
+{
+    QJsonArray inlineKeyboard;
+
+    auto makeBtn = [](const QString &text, const QString &data) {
+        QJsonObject btn;
+        btn["text"] = text;
+        btn["callback_data"] = data;
+        return btn;
+    };
+
+    QJsonArray row1;
+    row1.append(makeBtn("✏️ Редактировать название", QString("edit_title:%1").arg(taskId)));
+    inlineKeyboard.append(row1);
+
+    QJsonArray row2;
+    row2.append(makeBtn("🏷️ Редактировать метку", QString("edit_tags:%1").arg(taskId)));
+    inlineKeyboard.append(row2);
+
+    QJsonArray row3;
+    row3.append(makeBtn("⏰ Редактировать дедлайн", QString("edit_deadline:%1").arg(taskId)));
+    inlineKeyboard.append(row3);
+
+    QJsonArray row4;
+    if (isCompleted) {
+        row4.append(makeBtn("↩️ Вернуть в работу", QString("uncomplete_task:%1").arg(taskId)));
+    } else {
+        row4.append(makeBtn("✅ Выполнить задачу", QString("complete_task:%1").arg(taskId)));
+    }
+    row4.append(makeBtn("🗑️ Удалить задачу", QString("delete_task:%1").arg(taskId)));
+    inlineKeyboard.append(row4);
+
+    QJsonObject markup;
+    markup["inline_keyboard"] = inlineKeyboard;
+    return markup;
+}
+
+void TelegramBot::showTaskDetails(qint64 chatId, int taskId, int userIndex)
+{
+    if (!m_dbManager) return;
+
+    task t;
+    if (!m_dbManager->GetTaskById(taskId, t)) {
+        sendMessage(chatId, "⚠️ Задача не найдена (возможно, она уже была удалена).");
+        return;
+    }
+
+    QString categoryName = m_dbManager->GetProjectNameById(t.project_id);
+    QString tagsDisplay = t.tags.trimmed().isEmpty() ? "<i>нет</i>" : QString("<code>%1</code>").arg(t.tags.trimmed().toHtmlEscaped());
+    QString dlDisplay = t.deadline.isValid() ? t.deadline.toString("dd.MM.yyyy HH:mm") : "<i>нет</i>";
+    QString statusDisplay = t.is_completed ? "✅ Выполнена" : "⏳ В работе";
+
+    QString card = QString("📋 <b>Информация о задаче #%1</b>\n\n").arg(userIndex);
+    card += QString("📌 <b>Название:</b> %1\n").arg(t.title.toHtmlEscaped());
+    card += QString("📂 <b>Категория:</b> %1\n").arg(categoryName.toHtmlEscaped());
+    card += QString("🏷️ <b>Метки:</b> %1\n").arg(tagsDisplay);
+    card += QString("⏰ <b>Дедлайн:</b> %1\n").arg(dlDisplay);
+    card += QString("📊 <b>Статус:</b> %1\n\n").arg(statusDisplay);
+    card += "<i>Выберите действие с помощью кнопок ниже:</i>";
+
+    sendMessage(chatId, card, getTaskInlineKeyboard(taskId, t.is_completed));
+}
+
+void TelegramBot::processCallbackQuery(const QJsonObject &cbObj)
+{
+    QString queryId = cbObj.value("id").toString();
+    QJsonObject fromObj = cbObj.value("from").toObject();
+    qint64 chatId = fromObj.value("id").toInteger();
+    if (chatId == 0 && cbObj.contains("message")) {
+        chatId = cbObj.value("message").toObject().value("chat").toObject().value("id").toInteger();
+    }
+    QString data = cbObj.value("data").toString();
+
+    bool isAuthorized = m_dbManager ? m_dbManager->IsTelegramUserAuthorized(chatId) : false;
+    if (!isAuthorized) {
+        answerCallbackQuery(queryId, "⚠️ Вы не авторизованы.");
+        return;
+    }
+
+    QStringList parts = data.split(':');
+    if (parts.size() < 2) {
+        answerCallbackQuery(queryId);
+        return;
+    }
+
+    QString action = parts[0];
+    int taskId = parts[1].toInt();
+
+    // Отвечаем Telegram, чтобы убрать индикатор загрузки с кнопки
+    answerCallbackQuery(queryId);
+
+    if (action == "complete_task" || action == "uncomplete_task") {
+        task t;
+        if (!m_dbManager || !m_dbManager->GetTaskById(taskId, t)) {
+            sendMessage(chatId, "⚠️ Задача не найдена (возможно, она уже была удалена).");
+            return;
+        }
+
+        bool complete = (action == "complete_task");
+        m_dbManager->CompleteTask(complete, t);
+        emit taskAdded();
+
+        if (m_taskEditSessions.contains(chatId) && m_taskEditSessions[chatId].taskId == taskId) {
+            m_taskEditSessions.remove(chatId);
+        }
+
+        if (complete) {
+            log(QString("Пользователь chat_id %1 отметил задачу #%2 («%3») выполненной через Telegram").arg(chatId).arg(taskId).arg(t.title));
+            sendMessage(chatId, QString("✅ Задача <b>«%1»</b> успешно выполнена! 🎉").arg(t.title.toHtmlEscaped()));
+        } else {
+            log(QString("Пользователь chat_id %1 вернул задачу #%2 («%3») в работу через Telegram").arg(chatId).arg(taskId).arg(t.title));
+            sendMessage(chatId, QString("⏳ Задача <b>«%1»</b> возвращена в работу.").arg(t.title.toHtmlEscaped()));
+        }
+        return;
+    }
+
+    if (action == "delete_task") {
+        task t;
+        if (!m_dbManager || !m_dbManager->GetTaskById(taskId, t)) {
+            sendMessage(chatId, "⚠️ Задача уже была удалена.");
+            return;
+        }
+
+        QString deletedTitle = t.title;
+        m_dbManager->DeleteTaskFromDB(t);
+        emit taskAdded();
+
+        if (m_taskEditSessions.contains(chatId) && m_taskEditSessions[chatId].taskId == taskId) {
+            m_taskEditSessions.remove(chatId);
+        }
+
+        log(QString("Пользователь chat_id %1 удалил задачу #%2 («%3») через Telegram").arg(chatId).arg(taskId).arg(deletedTitle));
+        sendMessage(chatId, QString("🗑️ Задача <b>«%1»</b> успешно удалена!").arg(deletedTitle.toHtmlEscaped()));
+        return;
+    }
+
+    if (action == "edit_title") {
+        task t;
+        if (!m_dbManager || !m_dbManager->GetTaskById(taskId, t)) {
+            sendMessage(chatId, "⚠️ Задача не найдена (возможно, она удалена).");
+            return;
+        }
+
+        TaskEditSession session;
+        session.taskId = taskId;
+        session.field = TaskEditField::Title;
+        m_taskEditSessions[chatId] = session;
+
+        sendMessage(chatId,
+                    QString("✏️ <b>Редактирование названия</b>\n\n"
+                            "Текущее название:\n<b>%1</b>\n\n"
+                            "Введите новое название задачи:\n<i>(или нажмите «Отмена» для выхода)</i>")
+                        .arg(t.title.toHtmlEscaped()),
+                    getCancelReplyKeyboard());
+        return;
+    }
+
+    if (action == "edit_tags") {
+        task t;
+        if (!m_dbManager || !m_dbManager->GetTaskById(taskId, t)) {
+            sendMessage(chatId, "⚠️ Задача не найдена (возможно, она удалена).");
+            return;
+        }
+
+        TaskEditSession session;
+        session.taskId = taskId;
+        session.field = TaskEditField::Tags;
+        m_taskEditSessions[chatId] = session;
+
+        QString tagsDisplay = t.tags.trimmed().isEmpty() ? "<i>(нет меток)</i>" : QString("<code>%1</code>").arg(t.tags.toHtmlEscaped());
+        sendMessage(chatId,
+                    QString("🏷️ <b>Редактирование меток</b>\n\n"
+                            "Текущие метки: %1\n\n"
+                            "Введите новые метки через запятую или пробел\n(или отправьте <code>-</code>, чтобы очистить метки, либо «Отмена» для выхода):")
+                        .arg(tagsDisplay),
+                    getCancelReplyKeyboard());
+        return;
+    }
+
+    if (action == "edit_deadline") {
+        task t;
+        if (!m_dbManager || !m_dbManager->GetTaskById(taskId, t)) {
+            sendMessage(chatId, "⚠️ Задача не найдена (возможно, она удалена).");
+            return;
+        }
+
+        TaskEditSession session;
+        session.taskId = taskId;
+        session.field = TaskEditField::Deadline;
+        m_taskEditSessions[chatId] = session;
+
+        QString dlDisplay = t.deadline.isValid() ? t.deadline.toString("dd.MM.yyyy HH:mm") : "<i>(нет дедлайна)</i>";
+        sendMessage(chatId,
+                    QString("⏰ <b>Редактирование дедлайна</b>\n\n"
+                            "Текущий дедлайн: <b>%1</b>\n\n"
+                            "Введите новый дедлайн в формате <b>ДД.ММ.ГГГГ ЧЧ:ММ</b> (например: <code>05.11.2026 18:00</code>)\n"
+                            "(или отправьте <code>-</code>, чтобы убрать дедлайн, либо «Отмена» для выхода):")
+                        .arg(dlDisplay),
+                    getCancelReplyKeyboard());
+        return;
+    }
+}
+
+void TelegramBot::handleTaskEditStep(qint64 chatId, const QString &text)
+{
+    QString trimmedText = text.trimmed();
+    QString lowerText = trimmedText.toLower();
+
+    if (lowerText == "/cancel" || lowerText == "отмена" || trimmedText == "❌ Отмена") {
+        m_taskEditSessions.remove(chatId);
+        sendMessage(chatId, "🚫 Редактирование задачи отменено.", getMainReplyKeyboard());
+        return;
+    }
+
+    if (!m_taskEditSessions.contains(chatId)) return;
+
+    TaskEditSession session = m_taskEditSessions.value(chatId);
+    task t;
+    if (!m_dbManager || !m_dbManager->GetTaskById(session.taskId, t)) {
+        m_taskEditSessions.remove(chatId);
+        sendMessage(chatId, "⚠️ Задача не найдена или была удалена.", getMainReplyKeyboard());
+        return;
+    }
+
+    switch (session.field) {
+    case TaskEditField::Title: {
+        if (trimmedText.isEmpty()) {
+            sendMessage(chatId, "⚠️ Название не может быть пустым. Введите новое название (или «Отмена»):");
+            return;
+        }
+        t.title = trimmedText;
+        m_dbManager->UpdateTaskChanged(t);
+        m_taskEditSessions.remove(chatId);
+        emit taskAdded();
+        log(QString("Пользователь chat_id %1 изменил название задачи #%2 на «%3»").arg(chatId).arg(t.id).arg(t.title));
+        sendMessage(chatId, QString("✅ Название задачи успешно обновлено на:\n<b>%1</b>").arg(t.title.toHtmlEscaped()), getMainReplyKeyboard());
+        break;
+    }
+
+    case TaskEditField::Tags: {
+        if (trimmedText == "-" || trimmedText == "—" || trimmedText.compare("нет", Qt::CaseInsensitive) == 0) {
+            t.tags = "";
+        } else {
+            t.tags = trimmedText;
+        }
+        m_dbManager->UpdateTaskChanged(t);
+        m_taskEditSessions.remove(chatId);
+        emit taskAdded();
+        log(QString("Пользователь chat_id %1 изменил метки задачи #%2 на «%3»").arg(chatId).arg(t.id).arg(t.tags));
+        QString tagInfo = t.tags.isEmpty() ? "<i>(метки удалены)</i>" : QString("<code>%1</code>").arg(t.tags.toHtmlEscaped());
+        sendMessage(chatId, QString("✅ Метки задачи успешно обновлены: %1").arg(tagInfo), getMainReplyKeyboard());
+        break;
+    }
+
+    case TaskEditField::Deadline: {
+        QDateTime deadline;
+        if (trimmedText != "-" && trimmedText != "—" && trimmedText.compare("нет", Qt::CaseInsensitive) != 0) {
+            static const QStringList formats = {
+                "dd.MM.yyyy HH:mm",
+                "dd.MM.yyyy H:mm",
+                "dd.MM.yyyy HH:mm:ss",
+                "dd.MM.yyyy",
+                "yyyy-MM-dd HH:mm",
+                "yyyy-MM-dd"
+            };
+
+            for (const QString &fmt : formats) {
+                QDateTime dt = QDateTime::fromString(trimmedText, fmt);
+                if (dt.isValid()) {
+                    deadline = dt;
+                    break;
+                }
+            }
+
+            if (!deadline.isValid()) {
+                sendMessage(chatId,
+                            "⚠️ <b>Неверный формат даты!</b>\n\n"
+                            "Пожалуйста, введите дату в формате <b>ДД.ММ.ГГГГ ЧЧ:ММ</b> (например: <code>05.11.2026 18:00</code>)\n"
+                            "или отправьте <code>-</code>, чтобы убрать дедлайн (или «Отмена» для выхода):");
+                return;
+            }
+        }
+
+        t.deadline = deadline;
+        m_dbManager->UpdateTaskChanged(t);
+        m_taskEditSessions.remove(chatId);
+        emit taskAdded();
+        log(QString("Пользователь chat_id %1 изменил дедлайн задачи #%2").arg(chatId).arg(t.id));
+        QString dlInfo = deadline.isValid() ? deadline.toString("dd.MM.yyyy HH:mm") : "<i>(дедлайн снят)</i>";
+        sendMessage(chatId, QString("✅ Дедлайн задачи успешно обновлен: <b>%1</b>").arg(dlInfo), getMainReplyKeyboard());
+        break;
+    }
+
+    default:
+        m_taskEditSessions.remove(chatId);
+        break;
     }
 }
 
